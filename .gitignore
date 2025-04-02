@@ -21,3 +21,7 @@ elixir_37no_server-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+.idea/
+elixir_37no_server.iml
+.DS_Store
