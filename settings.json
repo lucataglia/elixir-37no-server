@@ -1,0 +1,5 @@
+{
+  "elixir.credo.strictMode": true,
+  "elixir.credo.configurationFile": ".credo.exs",
+  "elixir.credo.enableDebug": false
+}
