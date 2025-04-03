@@ -1,6 +1,6 @@
 defmodule StringUtils do
   def ensure_min_length(str \\ "", min_length, pad_char \\ " ", mode) do
-    current_length = String.length(str)
+    current_length = String.length(str) || 1
 
     if current_length < min_length do
       case mode do

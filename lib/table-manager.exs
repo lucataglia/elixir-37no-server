@@ -50,8 +50,6 @@ defmodule TableManager do
         _ -> dealer_index
       end
 
-    IO.puts("new_dealer_index: #{new_dealer_index}")
-
     players = game_state[:players]
     count = (players |> Map.keys() |> length) + 1
 
@@ -114,32 +112,93 @@ defmodule TableManager do
     update_used_card = Map.put(game_state[:players][name][:cards][String.to_atom(card[:key])], :used, true)
     new_cards = Map.put(cards, String.to_atom(card[:key]), update_used_card)
 
-    new_player =
-      game_state[:players][name]
-      |> Map.put(:current, card)
-      |> Map.put(:cards, new_cards)
-
-    IO.puts("FOO: " <> inspect(new_current_turn, pretty: true, syntax_colors: [atom: :cyan, string: :green]))
-
-    {new_info, new_turn_winner} =
+    new_game_state =
       cond do
         length(new_current_turn) == 3 ->
-          [{name, _} | _] = new_current_turn |> Enum.sort_by(fn {_, %{ranking: r}} -> r end, :desc)
-          pretties = new_current_turn |> Enum.map(fn {_, %{pretty: p}} -> p end) |> Enum.join(" ")
-          {"#{IO.ANSI.format([:light_green, name])}: #{pretties}", name}
+          [{winner_name, _} | _] = new_current_turn |> Enum.sort_by(fn {_, %{ranking: r}} -> r end, :desc)
+
+          pretties =
+            new_current_turn
+            |> Enum.sort_by(fn {_, %{ranking: r}} -> r end, :desc)
+            |> Enum.map(fn {_, %{pretty: p}} -> p end)
+            |> Enum.join(" ")
+
+          # Update winner player
+          winner_index = game_state[:players][winner_name][:index]
+          winner_new_stack = game_state[:players][winner_name][:stack] ++ new_current_turn
+          winner_new_points = game_state[:players][winner_name][:points] + (new_current_turn |> Enum.map(fn {_, %{points: p}} -> p end) |> Enum.sum())
+
+          IO.puts(winner_new_points)
+
+          new_player_winner =
+            cond do
+              winner_name == name ->
+                game_state[:players][winner_name]
+                |> Map.put(:cards, new_cards)
+                |> Map.put(:stack, winner_new_stack)
+                |> Map.put(:points, winner_new_points)
+                |> Map.put(:current, nil)
+
+              winner_name != name ->
+                game_state[:players][winner_name]
+                |> Map.put(:stack, winner_new_stack)
+                |> Map.put(:points, winner_new_points)
+                |> Map.put(:current, nil)
+            end
+
+          # Update other players
+          other_players =
+            game_state[:players]
+            |> Enum.to_list()
+            |> Enum.filter(fn {n, _} -> n !== winner_name end)
+            |> Enum.sort_by(fn n -> n == name end)
+
+          IO.puts(inspect(Enum.map(other_players, fn {name, _} -> name end)))
+
+          {{name_other1, other_player1}, {name_other2, other_player2}} =
+            case other_players do
+              [{^name, o1}, {name_o2, o2}] ->
+                new_o1 = o1 |> Map.put(:current, nil) |> Map.put(:cards, new_cards)
+                new_o2 = o2 |> Map.put(:current, nil)
+
+                {{name, new_o1}, {name_o2, new_o2}}
+
+              [{name_o1, o1}, {name_o2, o2}] ->
+                new_o1 = o1 |> Map.put(:current, nil)
+                new_o2 = o2 |> Map.put(:current, nil)
+
+                {{name_o1, new_o1}, {name_o2, new_o2}}
+            end
+
+          new_players =
+            game_state[:players]
+            |> Map.put(winner_name, new_player_winner)
+            |> Map.put(name_other1, other_player1)
+            |> Map.put(name_other2, other_player2)
+
+          # New game state
+          %{
+            game_state
+            | turn_first_card: nil,
+              dealer_index: winner_index,
+              info: "#{IO.ANSI.format([:light_green, winner_name])}: #{pretties}",
+              turn_winner: winner_name,
+              players: new_players
+          }
 
         length(new_current_turn) < 3 ->
-          {"", ""}
-      end
+          new_player =
+            game_state[:players][name]
+            |> Map.put(:current, card)
+            |> Map.put(:cards, new_cards)
 
-    new_game_state = %{
-      game_state
-      | turn_first_card: new_turn_first_card,
-        dealer_index: new_dealer_index,
-        info: new_info,
-        turn_winner: new_turn_winner,
-        players: Map.put(game_state[:players], name, new_player)
-    }
+          %{
+            game_state
+            | turn_first_card: new_turn_first_card,
+              dealer_index: new_dealer_index,
+              players: game_state[:players] |> Map.put(name, new_player)
+          }
+      end
 
     Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
       if new_dealer_index == i do

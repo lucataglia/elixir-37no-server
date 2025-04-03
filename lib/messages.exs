@@ -58,7 +58,7 @@ defmodule Messages do
     dealer_index = game_state[:dealer_index]
     info = game_state[:info]
     turn_winner = game_state[:turn_winner]
-    turn_first_card_pretty = game_state[:turn_first_card][:pretty] || "--"
+    tfcp = game_state[:turn_first_card][:pretty] || "--"
 
     circle = "\u25CF"
     right = "\u2571"
@@ -75,7 +75,14 @@ defmodule Messages do
     ] = reorder_by_name(players, name)
 
     # NAMES
-    IO.puts("p1: #{p1[:index]} p2: #{p2[:index]} me: #{me[:index]} dealer_index: #{dealer_index}}")
+
+    {dealer_name, _} =
+      players
+      |> Enum.to_list()
+      |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
+
+    # TODO: put the name in blue so it is equal to the colored name on the edge of the rectangle
+    dealer_name_bluee = StringUtils.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
 
     p1_name =
       if p1[:index] == dealer_index do
@@ -104,8 +111,9 @@ defmodule Messages do
       end
 
     # CARDS
-    p1_cards = StringUtils.ensure_min_length("#{length(Enum.to_list(p1[:cards]))}", 11, :left)
-    p2_cards = length(Enum.to_list(p2[:cards]))
+    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end))
+    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end))
+    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end))
 
     {_, my_cards} =
       me[:cards]
@@ -144,19 +152,19 @@ defmodule Messages do
         0 ->
           cond do
             p1[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 20, :left)
+              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 10, :right)
 
             p1[:name] != turn_winner ->
-              StringUtils.ensure_min_length("0", 11, :left)
+              "0"
           end
 
         _ ->
           cond do
             p1[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 20, :left)
+              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 10, :right)
 
             p1[:name] != turn_winner ->
-              StringUtils.ensure_min_length("?", 11, :left)
+              "?"
           end
       end
 
@@ -165,19 +173,19 @@ defmodule Messages do
         0 ->
           cond do
             p2[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 11, :right)
+              "#{IO.ANSI.format([:light_green, "0"])}"
 
             p2[:name] != turn_winner ->
-              StringUtils.ensure_min_length("0", 11, :right)
+              "0"
           end
 
         _ ->
           cond do
             p2[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 11, :right)
+              "#{IO.ANSI.format([:light_green, "?"])}"
 
             p2[:name] != turn_winner ->
-              StringUtils.ensure_min_length("?", 11, :right)
+              "?"
           end
       end
 
@@ -186,21 +194,24 @@ defmodule Messages do
         0 ->
           cond do
             me[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 11, :right)
+              "#{IO.ANSI.format([:light_green, "0"])}"
 
             me[:name] != turn_winner ->
-              StringUtils.ensure_min_length("0", 11, :right)
+              "0"
           end
 
         _ ->
           cond do
             me[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 11, :right)
+              "#{IO.ANSI.format([:light_green, "?"])}"
 
             me[:name] != turn_winner ->
-              StringUtils.ensure_min_length("?", 11, :right)
+              "?"
           end
       end
+
+    # P1 CARDS AND STACK
+    p1_cards_and_stack = "                #{p1_cards}  #{p1_stack}"
 
     # CURRENT
     p1_curr =
@@ -228,23 +239,23 @@ defmodule Messages do
     #{clear_char()}
     #{title()}
 
-                    First: #{turn_first_card_pretty}
-                    #{info}
-                    #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
-                    #{v}                                                                 #{v}
-                    #{v}                                                                 #{v}
-                    #{v}                                                                 #{v}
-        #{p1_name}  #{v}     #{p1_curr}                                   #{p2_curr}     #{v}  #{p2_name}
-       #{p1_cards}  #{v}                                                                 #{v}  #{p2_cards}
-       #{p1_stack}  #{v}                                                                 #{v}  #{p2_stack}
-                    #{v}                                                                 #{v}
-                    #{v}                              #{me_curr}                         #{v}
-                    #{v}                                                                 #{v}
-                    #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
+                              First: #{tfcp}              #{info}
+                              #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
+                              #{v}                      #{dealer_name_bluee}                       #{v}
+                              #{v}                                                                 #{v}
+                              #{v}                                                                 #{v}
+                  #{p1_name}  #{v}     #{p1_curr}                                   #{p2_curr}     #{v}  #{p2_name}
+       #{p1_cards_and_stack}  #{v}                                                                 #{v}  #{p2_cards}  #{p2_stack}
+                              #{v}                                                                 #{v}
+                              #{v}                                                                 #{v}
+                              #{v}                              #{me_curr}                         #{v}
+                              #{v}                                                                 #{v}
+                              #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
 
-                    #{my_cards}
+                              #{my_cards}
 
-                                                #{me_name} #{me_stack}
+                                                          #{me_name}
+                                                          #{me_cards}  #{me_stack}
 
 
     #{piggyback}
