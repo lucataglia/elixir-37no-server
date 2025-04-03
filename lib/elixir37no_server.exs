@@ -19,7 +19,7 @@ defmodule SimpleServer do
     spawn(fn -> handle_client(client, pid) end)
 
     :gen_tcp.send(client, Messages.title())
-    :gen_tcp.send(client, "Inserisci il tuo nome: ")
+    :gen_tcp.send(client, "Pick a name (only letters and numbers, no whitespaces): ")
 
     accept_connections(socket)
   end

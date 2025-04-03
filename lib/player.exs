@@ -1,6 +1,7 @@
 Code.require_file("deck.exs")
 Code.require_file("table-manager.exs")
 Code.require_file("messages.exs")
+Code.require_file("utils/regex-utils.exs")
 
 defmodule Player do
   use GenServer
@@ -50,10 +51,25 @@ defmodule Player do
   # STATE - UNNAMED
   @impl true
   def handle_cast({:recv, name}, %{behavior: :unnamed} = state) do
-    TableManager.check_if_name_is_available(name)
-    |> (fn
+    case RegexUtils.check_player_name(name) do
+      {:error, :too_short} ->
+        GenServer.cast(self(), {:warning, Messages.name_too_short()})
+        {:noreply, state}
+
+      {:error, :too_long} ->
+        GenServer.cast(self(), {:warning, Messages.name_too_long()})
+        {:noreply, state}
+
+      {:error, :invalid_chars} ->
+        GenServer.cast(self(), {:warning, Messages.name_contains_invalid_chars()})
+        {:noreply, state}
+
+      :ok ->
+        case TableManager.check_if_name_is_available(name) do
           true ->
             TableManager.add_player(self(), name)
+
+            GenServer.cast(self(), {:success, Messages.name_is_valid(name)})
 
             new_state = %{state | name: name, behavior: :login}
             {:noreply, new_state}
@@ -61,7 +77,8 @@ defmodule Player do
           false ->
             GenServer.cast(self(), {:warning, Messages.name_already_taken(name)})
             {:noreply, state}
-        end).()
+        end
+    end
   end
 
   # STATE - LOGIN
@@ -90,38 +107,47 @@ defmodule Player do
         {:recv, data},
         %{game_state: game_state, deck: deck, name: name, behavior: :dealer} = state
       ) do
-    turn_first_card = game_state[:turn_first_card]
-
-    cards = game_state[:players][name][:cards]
-    choice = deck[String.to_atom(data)]
-
-    if choice do
-      if Map.has_key?(cards, String.to_atom(data)) do
-        case Deck.is_a_valid_card(data, cards, turn_first_card) do
-          "ok" ->
-            TableManager.send_choice(name, choice)
-
-          "ok-change-ranking" ->
-            TableManager.send_choice(name, %{choice | raking: 0})
-
-          "wrong-suit" ->
-            piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-            GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
-
-          "invalid-chars" ->
-            piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-            GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
-        end
-      else
-        piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
+    case RegexUtils.is_valid_card_key(data) do
+      {:error, :invalid_input} ->
+        piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
         GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
-      end
-    else
-      piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-      GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
-    end
 
-    {:noreply, state}
+        {:noreply, state}
+
+      :ok ->
+        turn_first_card = game_state[:turn_first_card]
+
+        cards = game_state[:players][name][:cards]
+        choice = deck[String.to_atom(data)]
+
+        if choice do
+          if Map.has_key?(cards, String.to_atom(data)) do
+            case Deck.is_a_valid_card(data, cards, turn_first_card) do
+              :ok ->
+                TableManager.send_choice(name, choice)
+
+              {:ok, :change_ranking} ->
+                TableManager.send_choice(name, %{choice | ranking: 0})
+
+              {:error, :wrong_suit} ->
+                piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
+                GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+
+              {:error, :invalid_input} ->
+                piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+                GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+            end
+          else
+            piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
+            GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+          end
+        else
+          piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+          GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+        end
+
+        {:noreply, state}
+    end
   end
 
   def handle_cast({:better, game_state}, %{name: n, behavior: :dealer} = state) do
@@ -162,7 +188,10 @@ defmodule Player do
 
   # *** Public api ***
   def forward_data(pid, data) do
-    GenServer.cast(pid, {:recv, data})
+    cond do
+      data == "" -> GenServer.cast(pid, {:warning, "Invalid input"})
+      data != "" -> GenServer.cast(pid, {:recv, data})
+    end
   end
 
   def stop(pid) do
