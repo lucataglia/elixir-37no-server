@@ -1,6 +1,6 @@
 Code.require_file("player.exs")
 Code.require_file("table-manager.exs")
-Code.require_file("constants.exs")
+Code.require_file("messages.exs")
 
 defmodule SimpleServer do
   def start(port) do
@@ -18,7 +18,7 @@ defmodule SimpleServer do
     {:ok, pid} = Player.start_link(client)
     spawn(fn -> handle_client(client, pid) end)
 
-    :gen_tcp.send(client, Constants.title())
+    :gen_tcp.send(client, Messages.title())
     :gen_tcp.send(client, "Inserisci il tuo nome: ")
 
     accept_connections(socket)
@@ -40,6 +40,7 @@ defmodule SimpleServer do
 
               no_white_spaces ->
                 Player.forward_data(pid, no_white_spaces)
+                handle_client(client, pid)
             end).()
 
       {:error, :closed} ->
