@@ -10,7 +10,6 @@ defmodule TableManager do
     do: %{
       behavior: :login,
       deck: Deck.shuffle(),
-      used_card_count: 0,
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
       # }
@@ -19,9 +18,10 @@ defmodule TableManager do
       # %{
       #   turn_first_card: %{label, suit, pretty, ranking, point},
       #   dealer_index: [0..2]
+      #   used_card_count: 0,
       #   players: %{ [name]: %{pid, name, cards, points, index, current, stack}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: nil, info: "", turn_winner: "", players: %{}}
+      game_state: %{turn_first_card: nil, dealer_index: nil, used_card_count: 0, info: "", turn_winner: "", players: %{}}
     }
 
   def start_link() do
@@ -94,10 +94,18 @@ defmodule TableManager do
 
   # GAME
   @impl true
-  def handle_cast({:choice, name, card}, %{current_turn: current_turn, used_card_count: used_card_count, game_state: game_state, behavior: :game} = state) do
+  def handle_cast({:choice, name, card}, %{current_turn: current_turn, game_state: game_state, behavior: :game} = state) do
     dealer_index = game_state[:dealer_index]
+    used_card_count = game_state[:used_card_count]
     new_current_turn = [{name, card} | current_turn]
     new_used_card_count = used_card_count + 1
+
+    new_behavior =
+      if new_used_card_count == Deck.card_count() do
+        :end_game
+      else
+        :game
+      end
 
     new_turn_first_card =
       if game_state[:turn_first_card] do
@@ -106,7 +114,6 @@ defmodule TableManager do
         card
       end
 
-    new_dealer_index = rem(dealer_index + 1, 3)
     cards = game_state[:players][name][:cards]
 
     update_used_card = Map.put(game_state[:players][name][:cards][String.to_atom(card[:key])], :used, true)
@@ -151,9 +158,9 @@ defmodule TableManager do
             game_state[:players]
             |> Enum.to_list()
             |> Enum.filter(fn {n, _} -> n !== winner_name end)
-            |> Enum.sort_by(fn n -> n == name end)
+            |> Enum.sort_by(fn {n, _} -> n == name end, :desc)
 
-          IO.puts(inspect(Enum.map(other_players, fn {name, _} -> name end)))
+          IO.puts("other_players: " <> inspect(other_players, pretty: true, syntax_colors: [atom: :cyan, string: :green]))
 
           {{name_other1, other_player1}, {name_other2, other_player2}} =
             case other_players do
@@ -183,10 +190,13 @@ defmodule TableManager do
               dealer_index: winner_index,
               info: "#{IO.ANSI.format([:light_green, winner_name])}: #{pretties}",
               turn_winner: winner_name,
+              used_card_count: new_used_card_count,
               players: new_players
           }
 
-        length(new_current_turn) < 3 ->
+        true ->
+          new_dealer_index = rem(dealer_index + 1, 3)
+
           new_player =
             game_state[:players][name]
             |> Map.put(:current, card)
@@ -196,19 +206,29 @@ defmodule TableManager do
             game_state
             | turn_first_card: new_turn_first_card,
               dealer_index: new_dealer_index,
+              used_card_count: new_used_card_count,
               players: game_state[:players] |> Map.put(name, new_player)
           }
       end
 
     Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
-      if new_dealer_index == i do
-        GenServer.cast(p, {:dealer, new_game_state})
-      else
-        GenServer.cast(p, {:better, new_game_state})
+      cond do
+        new_used_card_count == Deck.card_count() -> GenServer.cast(p, {:end_game, new_game_state})
+        new_game_state[:dealer_index] == i -> GenServer.cast(p, {:dealer, new_game_state})
+        true -> GenServer.cast(p, {:better, new_game_state})
       end
     end)
 
-    {:noreply, %{state | game_state: new_game_state, current_turn: new_current_turn, used_card_count: new_used_card_count}}
+    cond do
+      length(new_current_turn) == 3 -> {:noreply, %{state | game_state: new_game_state, current_turn: [], behavior: new_behavior}}
+      true -> {:noreply, %{state | game_state: new_game_state, current_turn: new_current_turn, behavior: new_behavior}}
+    end
+  end
+
+  # END GAME
+  @impl true
+  def handle_cast({:replay, name}, %{behavior: :end_game}) do
+    IO.puts("#{name} want to replay")
   end
 
   @impl true
@@ -231,5 +251,9 @@ defmodule TableManager do
 
   def send_choice(name, card) do
     GenServer.cast(:tablemanager, {:choice, name, card})
+  end
+
+  def replay(name) do
+    GenServer.cast(:tablemanager, {:replay, name})
   end
 end

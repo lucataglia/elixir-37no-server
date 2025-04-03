@@ -1,4 +1,5 @@
 Code.require_file("./utils/string-utils.exs")
+Code.require_file("deck.exs")
 
 defmodule Messages do
   defp clear_char, do: "[2J"
@@ -44,6 +45,8 @@ defmodule Messages do
 
   def you_have_to_play_the_right_suit(card, right_suit), do: "#{card} - You have to play #{right_suit}\n"
 
+  def type_replay_to_continue(), do: "Type replay to continue\n"
+
   def message(message),
     do: "#{message}\n"
 
@@ -56,6 +59,7 @@ defmodule Messages do
   def print_table(game_state, name, piggyback \\ "") do
     players = game_state[:players]
     dealer_index = game_state[:dealer_index]
+    used_card_count = game_state[:used_card_count]
     info = game_state[:info]
     turn_winner = game_state[:turn_winner]
     tfcp = game_state[:turn_first_card][:pretty] || "--"
@@ -82,7 +86,11 @@ defmodule Messages do
       |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
 
     # TODO: put the name in blue so it is equal to the colored name on the edge of the rectangle
-    dealer_name_bluee = StringUtils.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
+    dealer_name_bluee =
+      cond do
+        used_card_count < Deck.card_count() -> StringUtils.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
+        true -> StringUtils.ensure_min_length("Game ended 🦉", 19, " ", :right)
+      end
 
     p1_name =
       if p1[:index] == dealer_index do
@@ -111,9 +119,9 @@ defmodule Messages do
       end
 
     # CARDS
-    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end))
-    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end))
-    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end))
+    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> StringUtils.ensure_min_length(2, :left)
+    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> StringUtils.ensure_min_length(2, :right)
+    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> StringUtils.ensure_min_length(2, :right)
 
     {_, my_cards} =
       me[:cards]
@@ -235,6 +243,55 @@ defmodule Messages do
         c -> StringUtils.ensure_min_length(c, 9, :right)
       end
 
+    # END GAME
+    p1_end_game_cards =
+      p1[:cards]
+      |> Enum.to_list()
+      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
+      |> Enum.map(fn {_, %{pretty: p}} -> p end)
+      |> Enum.join(" ")
+
+    p2_end_game_cards =
+      p2[:cards]
+      |> Enum.to_list()
+      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
+      |> Enum.map(fn {_, %{pretty: p}} -> p end)
+      |> Enum.join(" ")
+
+    me_end_game_cards =
+      me[:cards]
+      |> Enum.to_list()
+      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
+      |> Enum.map(fn {_, %{pretty: p}} -> p end)
+      |> Enum.join(" ")
+
+    p1_end_game_points =
+      p1[:cards]
+      |> Enum.to_list()
+      |> Enum.map(fn {_, %{points: p}} -> p end)
+      |> Enum.sum()
+
+    p2_end_game_points =
+      p2[:cards]
+      |> Enum.to_list()
+      |> Enum.map(fn {_, %{points: p}} -> p end)
+      |> Enum.sum()
+
+    me_end_game_points =
+      me[:cards]
+      |> Enum.to_list()
+      |> Enum.map(fn {_, %{points: p}} -> p end)
+      |> Enum.sum()
+
+    {p1_end_game, p2_end_game, me_end_game} =
+      cond do
+        used_card_count == Deck.card_count() ->
+          {"#{p1[:name]} (#{p1_end_game_points}):  #{p1_end_game_cards}", "#{p2[:name]} (#{p2_end_game_points}):  #{p2_end_game_cards}", "#{me[:name]} (#{me_end_game_points}):  #{me_end_game_cards}"}
+
+        true ->
+          {"", "", ""}
+      end
+
     """
     #{clear_char()}
     #{title()}
@@ -257,6 +314,9 @@ defmodule Messages do
                                                           #{me_name}
                                                           #{me_cards}  #{me_stack}
 
+    #{me_end_game}
+    #{p1_end_game}
+    #{p2_end_game}
 
     #{piggyback}
     """

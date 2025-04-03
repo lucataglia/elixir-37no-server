@@ -150,13 +150,26 @@ defmodule Player do
     end
   end
 
+  def handle_cast({:dealer, game_state}, %{name: n, behavior: :dealer} = state) do
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+
+    {:noreply, %{state | game_state: game_state, behavior: :dealer}}
+  end
+
   def handle_cast({:better, game_state}, %{name: n, behavior: :dealer} = state) do
     GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
-  # BETTER
+  def handle_cast({:end_game, game_state}, %{name: name, behavior: :dealer} = state) do
+    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_continue()])
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+
+    {:noreply, %{state | game_state: game_state, behavior: :end_game}}
+  end
+
+  # STATE - BETTER
   def handle_cast({:recv, _}, %{behavior: :better} = state) do
     GenServer.cast(self(), {:message, Messages.wait_your_turn()})
 
@@ -175,11 +188,43 @@ defmodule Player do
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
+  def handle_cast({:end_game, game_state}, %{name: name, behavior: :better} = state) do
+    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_continue()])
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+
+    {:noreply, %{state | game_state: game_state, behavior: :end_game}}
+  end
+
+  # STATE - END GAME
+  def handle_cast({:recv, data}, %{name: name, behavior: :end_game} = state) do
+    if data == "replay" do
+      TableManager.replay(name)
+    end
+
+    {:noreply, %{state | behavior: :ready_to_replay}}
+  end
+
+  # STATE - READY TO REPLY
+  def handle_cast({:dealer, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+
+    {:noreply, %{state | game_state: game_state, behavior: :dealer}}
+  end
+
+  def handle_cast({:better, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+
+    {:noreply, %{state | game_state: game_state, behavior: :better}}
+  end
+
+  # DEGUB that march everything
   def handle_cast({x, _}, state) do
     IO.inspect("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
+
+  # - - -
 
   @impl true
   def init(initial_state) do
