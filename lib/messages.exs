@@ -18,7 +18,6 @@ defmodule Messages do
         | Tre sette chapa no (Luca Tagliabue) #{ita_flag()} |
         +----------------------------------------+
 
-
         """
       ])
 
@@ -65,12 +64,11 @@ defmodule Messages do
     tfcp = game_state[:turn_first_card][:pretty] || "--"
 
     circle = "\u25CF"
-    right = "\u2571"
-    left = "\u2572"
     v = "\u2503"
+    h = "\u2501"
 
-    dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
-      circle <> String.duplicate("\u2501", 65) <> circle
+    dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
+      circle <> String.duplicate(h, 77) <> circle
 
     [
       me,
@@ -80,16 +78,19 @@ defmodule Messages do
 
     # NAMES
 
-    {dealer_name, _} =
-      players
-      |> Enum.to_list()
-      |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
-
     # TODO: put the name in blue so it is equal to the colored name on the edge of the rectangle
     dealer_name_bluee =
       cond do
-        used_card_count < Deck.card_count() -> StringUtils.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
-        true -> StringUtils.ensure_min_length("Game ended 🦉", 19, " ", :right)
+        used_card_count < Deck.card_count() ->
+          {dealer_name, _} =
+            players
+            |> Enum.to_list()
+            |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
+
+          StringUtils.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
+
+        true ->
+          StringUtils.ensure_min_length("Game ended 🦉", 19, " ", :right)
       end
 
     p1_name =
@@ -245,78 +246,101 @@ defmodule Messages do
 
     # END GAME
     p1_end_game_cards =
-      p1[:cards]
+      p1[:stack]
       |> Enum.to_list()
       |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, %{pretty: p}} -> p end)
-      |> Enum.join(" ")
+      |> Enum.map(fn {_, %{points: p, pretty: pr}} ->
+        case p do
+          1 -> "#{underline()}#{pr}#{nc()}"
+          0.34 -> "#{underline()}#{pr}#{nc()}"
+          _ -> pr
+        end
+      end)
+      |> Enum.join("  ")
 
     p2_end_game_cards =
-      p2[:cards]
+      p2[:stack]
       |> Enum.to_list()
       |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, %{pretty: p}} -> p end)
+      |> Enum.map(fn {_, %{points: p, pretty: pr}} ->
+        case p do
+          1 -> "#{underline()}#{pr}#{nc()}"
+          0.34 -> "#{underline()}#{pr}#{nc()}"
+          _ -> pr
+        end
+      end)
       |> Enum.join(" ")
 
     me_end_game_cards =
-      me[:cards]
+      me[:stack]
       |> Enum.to_list()
       |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, %{pretty: p}} -> p end)
+      |> Enum.map(fn {_, %{points: p, pretty: pr}} ->
+        case p do
+          1 -> "#{underline()}#{pr}#{nc()}"
+          0.34 -> "#{underline()}#{pr}#{nc()}"
+          _ -> pr
+        end
+      end)
       |> Enum.join(" ")
-
-    p1_end_game_points =
-      p1[:cards]
-      |> Enum.to_list()
-      |> Enum.map(fn {_, %{points: p}} -> p end)
-      |> Enum.sum()
-
-    p2_end_game_points =
-      p2[:cards]
-      |> Enum.to_list()
-      |> Enum.map(fn {_, %{points: p}} -> p end)
-      |> Enum.sum()
-
-    me_end_game_points =
-      me[:cards]
-      |> Enum.to_list()
-      |> Enum.map(fn {_, %{points: p}} -> p end)
-      |> Enum.sum()
 
     {p1_end_game, p2_end_game, me_end_game} =
       cond do
         used_card_count == Deck.card_count() ->
-          {"#{p1[:name]} (#{p1_end_game_points}):  #{p1_end_game_cards}", "#{p2[:name]} (#{p2_end_game_points}):  #{p2_end_game_cards}", "#{me[:name]} (#{me_end_game_points}):  #{me_end_game_cards}"}
+          {"#{p1[:name]} (#{p1[:points]}):  #{p1_end_game_cards}", "#{p2[:name]} (#{p2[:points]}):  #{p2_end_game_cards}", "#{me[:name]} (#{me[:points]}):  #{me_end_game_cards}"}
 
         true ->
           {"", "", ""}
       end
 
+    end_game_label =
+      case used_card_count == Deck.card_count() do
+        true -> "End game"
+        false -> ""
+      end
+
+    # LEADERBOARD
+    [{_, first}, {_, second}, {_, third}] = players |> Enum.sort_by(fn {_, %{leaderboard: l}} -> Enum.sum(l) end)
+    IO.inspect(first[:leaderboard])
+    first_leaderboard = "#{first[:name]} #{first[:leaderboard] |> Enum.sum()}"
+    second_leaderboard = "#{second[:name]} #{second[:leaderboard] |> Enum.sum()}"
+    third_leaderboard = "#{third[:name]} #{third[:leaderboard] |> Enum.sum()}"
+
     """
     #{clear_char()}
     #{title()}
 
-                              First: #{tfcp}              #{info}
-                              #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
-                              #{v}                      #{dealer_name_bluee}                       #{v}
-                              #{v}                                                                 #{v}
-                              #{v}                                                                 #{v}
-                  #{p1_name}  #{v}     #{p1_curr}                                   #{p2_curr}     #{v}  #{p2_name}
-       #{p1_cards_and_stack}  #{v}                                                                 #{v}  #{p2_cards}  #{p2_stack}
-                              #{v}                                                                 #{v}
-                              #{v}                                                                 #{v}
-                              #{v}                              #{me_curr}                         #{v}
-                              #{v}                                                                 #{v}
-                              #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
+                              Leaderboard
+                              1. #{first_leaderboard}
+                              2. #{second_leaderboard}
+                              3. #{third_leaderboard}
+
+
+      
+                              First: #{tfcp}                       #{info}
+                              #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
+                              #{v}                               #{dealer_name_bluee}                          #{v}
+                              #{v}                                                                             #{v}
+                              #{v}                                                                             #{v}
+                  #{p1_name}  #{v}     #{p1_curr}                                               #{p2_curr}     #{v}  #{p2_name}
+       #{p1_cards_and_stack}  #{v}                                                                             #{v}  #{p2_cards}  #{p2_stack}
+                              #{v}                                                                             #{v}
+                              #{v}                                                                             #{v}
+                              #{v}                                     #{me_curr}                              #{v}
+                              #{v}                                                                             #{v}
+                              #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
 
                               #{my_cards}
 
-                                                          #{me_name}
-                                                          #{me_cards}  #{me_stack}
+                                                                   #{me_name}
+                                                                   #{me_cards}  #{me_stack}
 
-    #{me_end_game}
-    #{p1_end_game}
-    #{p2_end_game}
+
+
+                              #{end_game_label}
+                              #{me_end_game}
+                              #{p1_end_game}
+                              #{p2_end_game}
 
     #{piggyback}
     """
