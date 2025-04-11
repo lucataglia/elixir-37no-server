@@ -17,13 +17,6 @@ defmodule Actors.Player do
     GenServer.start_link(__MODULE__, init_state(client))
   end
 
-  # STOP
-  @impl true
-  def handle_cast({:stop}, state) do
-    # TODO: inform the table manager
-    {:stop, :normal, state}
-  end
-
   # PRINT MESSAGES
   @impl true
   def handle_cast({:message, msg}, %{client: client} = state) do
@@ -43,7 +36,21 @@ defmodule Actors.Player do
     {:noreply, state}
   end
 
-  # STATE - UNNAMED
+  # GAME STATE UPDATE (e.g. some player exit the game)
+  @impl true
+  def handle_cast({:game_state_update, new_game_state, piggiback}, %{name: n} = state) do
+    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.withYellow(piggiback))})
+    {:noreply, %{state | game_state: new_game_state}}
+  end
+
+  # STOP
+  @impl true
+  def handle_cast({:stop}, %{name: n} = state) do
+    Actors.TableManager.player_stop(n)
+    {:stop, :normal, state}
+  end
+
+  # STATE - UNNAMED (TO BE MOVED INTO THE ACTOR.LOGIN
   @impl true
   def handle_cast({:recv, name}, %{behavior: :unnamed} = state) do
     case Utils.Regex.check_player_name(name) do

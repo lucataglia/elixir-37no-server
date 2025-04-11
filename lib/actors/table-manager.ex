@@ -23,7 +23,7 @@ defmodule Actors.TableManager do
       #   dealer_index: [0..2]
       #   used_card_count: 0,
       #   leaderboard: []
-      #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, stack, is_winner, is_looser}}
+      #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
       game_state: %{turn_first_card: nil, dealer_index: nil, used_card_count: 0, info: "", turn_winner: "", players: %{}}
     }
@@ -49,7 +49,7 @@ defmodule Actors.TableManager do
       #   dealer_index: [0..2]
       #   used_card_count: 0,
       #   leaderboard: []
-      #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, stack, is_winner, is_looser}}
+      #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
       game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", players: players}
     }
@@ -63,6 +63,20 @@ defmodule Actors.TableManager do
     players = game_state[:players]
 
     {:reply, !Map.has_key?(players, name), state}
+  end
+
+  # STOP
+  def handle_cast({:stop, name}, %{game_state: game_state} = state) do
+    players = game_state[:players]
+    new_player = %{players[name] | is_stopped: true}
+    new_game_state = %{game_state | players: Map.put(players, name, new_player)}
+
+    # Tells who is the new dealer
+    Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
+      GenServer.cast(p, {:game_state_update, new_game_state, Messages.player_exit_the_game(name)})
+    end)
+
+    {:noreply, %{state | game_state: new_game_state}}
   end
 
   # LOGIN
@@ -91,7 +105,8 @@ defmodule Actors.TableManager do
       leaderboard: [],
       stack: [],
       cards: Map.new(Enum.at(deck, count - 1)),
-      is_looser: false
+      is_looser: false,
+      is_stopped: false
     }
 
     new_players = Map.put(players, name, new_player)
@@ -410,5 +425,9 @@ defmodule Actors.TableManager do
 
   def replay(name) do
     GenServer.cast(:tablemanager, {:replay, name})
+  end
+
+  def player_stop(name) do
+    GenServer.cast(:tablemanager, {:stop, name})
   end
 end

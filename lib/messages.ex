@@ -47,6 +47,8 @@ defmodule Messages do
 
   def ready_to_replay_invalid_input(), do: "Other players still need to confirm if they want to replay \n"
 
+  def player_exit_the_game(name), do: "🚫 #{name} exit the game... \n"
+
   def wants_to_replay(names) do
     case length(names) do
       1 -> "#{IO.ANSI.format([:cyan, Enum.join(names, "")])} is ready to play again"
@@ -125,6 +127,26 @@ defmodule Messages do
         IO.ANSI.format([:cyan, me[:name]])
       else
         me[:name]
+      end
+
+    IO.puts("#{p1[:is_stopped]} #{p2[:is_stopped]}  #{me[:is_stopped]}")
+
+    p1i =
+      case p1[:is_stopped] do
+        true -> "🚫"
+        false -> ""
+      end
+
+    p2i =
+      case p2[:is_stopped] do
+        true -> "🚫"
+        false -> ""
+      end
+
+    mei =
+      case me[:is_stopped] do
+        true -> "🚫"
+        false -> ""
       end
 
     # CARDS

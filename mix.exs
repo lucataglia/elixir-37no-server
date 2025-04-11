@@ -15,7 +15,7 @@ defmodule Elixir37noServer.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {SimpleServer, []}
+      mod: {SimpleServer, [4000]}
     ]
   end
 

@@ -1,7 +1,9 @@
 defmodule SimpleServer do
-  def start(port) do
+  def start(_, [port]) do
     {:ok, socket} =
       :gen_tcp.listen(port, [:binary, packet: :line, active: false, reuseaddr: true])
+
+    Actors.TableManager.start_link()
 
     IO.puts("Server listening on port #{port}")
     accept_connections(socket)
@@ -11,6 +13,7 @@ defmodule SimpleServer do
     {:ok, client} = :gen_tcp.accept(socket)
 
     IO.puts("Client connected")
+
     {:ok, pid} = Actors.Player.start_link(client)
     spawn(fn -> handle_client(client, pid) end)
 
@@ -40,6 +43,7 @@ defmodule SimpleServer do
             end).()
 
       {:error, :closed} ->
+        Actors.Player.stop(pid)
         IO.puts("Client disconnected")
 
       {:error, reason} ->
@@ -61,6 +65,3 @@ defmodule SimpleServer do
     :gen_tcp.recv(client, 0)
   end
 end
-
-Actors.TableManager.start_link()
-SimpleServer.start(4000)
