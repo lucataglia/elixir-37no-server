@@ -1,4 +1,4 @@
-defmodule RegexUtils do
+defmodule Utils.Regex do
   def is_valid_card_key(key) do
     case Enum.member?(
            [
@@ -63,6 +63,19 @@ defmodule RegexUtils do
 
       true ->
         {:error, :invalid_chars}
+    end
+  end
+
+  def check_end_game_input(recv) do
+    case String.downcase(recv) do
+      "replay" ->
+        {:replay}
+
+      "re" ->
+        {:replay}
+
+      _ ->
+        {:error, :invalid_input}
     end
   end
 end

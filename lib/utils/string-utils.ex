@@ -1,4 +1,4 @@
-defmodule StringUtils do
+defmodule Utils.String do
   def ensure_min_length(str \\ "", min_length, pad_char \\ " ", mode) do
     current_length = String.length(str) || 1
 

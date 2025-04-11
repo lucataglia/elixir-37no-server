@@ -1,6 +1,3 @@
-Code.require_file("./utils/string-utils.exs")
-Code.require_file("deck.exs")
-
 defmodule Messages do
   defp clear_char, do: "[2J"
   defp underline, do: "\u001b[0004m"
@@ -44,7 +41,18 @@ defmodule Messages do
 
   def you_have_to_play_the_right_suit(card, right_suit), do: "#{card} - You have to play #{right_suit}\n"
 
-  def type_replay_to_continue(), do: "Type replay to continue\n"
+  def type_replay_to_play_again(), do: "Type replay to play again\n"
+
+  def end_game_invalid_input(), do: "Type replay to play again \n"
+
+  def ready_to_replay_invalid_input(), do: "Other players still need to confirm if they want to replay \n"
+
+  def wants_to_replay(names) do
+    case length(names) do
+      1 -> "#{IO.ANSI.format([:cyan, Enum.join(names, "")])} is ready to play again"
+      _ -> "#{IO.ANSI.format([:cyan, Enum.join(names, " and ")])} are ready to play again"
+    end
+  end
 
   def message(message),
     do: "#{message}\n"
@@ -87,22 +95,22 @@ defmodule Messages do
             |> Enum.to_list()
             |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
 
-          StringUtils.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
+          Utils.String.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
 
         true ->
-          StringUtils.ensure_min_length("Game ended 🦉", 19, " ", :right)
+          Utils.String.ensure_min_length("Game ended 🦉", 19, " ", :right)
       end
 
     p1_name =
       if p1[:index] == dealer_index do
-        StringUtils.ensure_min_length(
+        Utils.String.ensure_min_length(
           "#{IO.ANSI.format([:cyan, p1[:name]])}",
           19,
           " ",
           :left
         )
       else
-        StringUtils.ensure_min_length(p1[:name], 10, " ", :left)
+        Utils.String.ensure_min_length(p1[:name], 10, " ", :left)
       end
 
     p2_name =
@@ -120,9 +128,9 @@ defmodule Messages do
       end
 
     # CARDS
-    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> StringUtils.ensure_min_length(2, :left)
-    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> StringUtils.ensure_min_length(2, :right)
-    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> StringUtils.ensure_min_length(2, :right)
+    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> Utils.String.ensure_min_length(2, :left)
+    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> Utils.String.ensure_min_length(2, :right)
+    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> Utils.String.ensure_min_length(2, :right)
 
     {_, my_cards} =
       me[:cards]
@@ -131,9 +139,9 @@ defmodule Messages do
       |> Enum.map(fn {_, card} ->
         new_p =
           case card do
-            %{used: true} -> StringUtils.ensure_min_length("", 2, :right)
-            %{used: false, pretty: p} -> StringUtils.ensure_min_length(p, 2, :right)
-            %{pretty: p} -> StringUtils.ensure_min_length(p, 2, :right)
+            %{used: true} -> Utils.String.ensure_min_length("", 2, :right)
+            %{used: false, pretty: p} -> Utils.String.ensure_min_length(p, 2, :right)
+            %{pretty: p} -> Utils.String.ensure_min_length(p, 2, :right)
             _ -> "ciao"
           end
 
@@ -161,7 +169,7 @@ defmodule Messages do
         0 ->
           cond do
             p1[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 10, :right)
+              Utils.String.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 10, :right)
 
             p1[:name] != turn_winner ->
               "0"
@@ -170,7 +178,7 @@ defmodule Messages do
         _ ->
           cond do
             p1[:name] == turn_winner ->
-              StringUtils.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 10, :right)
+              Utils.String.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 10, :right)
 
             p1[:name] != turn_winner ->
               "?"
@@ -225,23 +233,23 @@ defmodule Messages do
     # CURRENT
     p1_curr =
       case get_in(p1, [:current, :pretty]) do
-        "" -> StringUtils.ensure_min_length("", 10, :right)
-        nil -> StringUtils.ensure_min_length("", 10, :right)
-        c -> StringUtils.ensure_min_length(c, 9, :right)
+        "" -> Utils.String.ensure_min_length("", 10, :right)
+        nil -> Utils.String.ensure_min_length("", 10, :right)
+        c -> Utils.String.ensure_min_length(c, 9, :right)
       end
 
     p2_curr =
       case get_in(p2, [:current, :pretty]) do
-        "" -> StringUtils.ensure_min_length("", 10, :left)
-        nil -> StringUtils.ensure_min_length("", 10, :left)
-        c -> StringUtils.ensure_min_length(c, 9, :left)
+        "" -> Utils.String.ensure_min_length("", 10, :left)
+        nil -> Utils.String.ensure_min_length("", 10, :left)
+        c -> Utils.String.ensure_min_length(c, 9, :left)
       end
 
     me_curr =
       case get_in(me, [:current, :pretty]) do
-        "" -> StringUtils.ensure_min_length("", 10, :right)
-        nil -> StringUtils.ensure_min_length("", 10, :right)
-        c -> StringUtils.ensure_min_length(c, 9, :right)
+        "" -> Utils.String.ensure_min_length("", 10, :right)
+        nil -> Utils.String.ensure_min_length("", 10, :right)
+        c -> Utils.String.ensure_min_length(c, 9, :right)
       end
 
     # END GAME
@@ -301,8 +309,15 @@ defmodule Messages do
 
     # LEADERBOARD
     [{_, first}, {_, second}, {_, third}] = players |> Enum.sort_by(fn {_, %{leaderboard: l}} -> Enum.sum(l) end)
-    IO.inspect(first[:leaderboard])
-    first_leaderboard = "#{first[:name]} #{first[:leaderboard] |> Enum.sum()}"
+    there_is_a_looser = third[:is_looser]
+
+    winner_icon =
+      case there_is_a_looser do
+        true -> "👑"
+        false -> ""
+      end
+
+    first_leaderboard = "#{first[:name]} #{first[:leaderboard] |> Enum.sum()} #{winner_icon}"
     second_leaderboard = "#{second[:name]} #{second[:leaderboard] |> Enum.sum()}"
     third_leaderboard = "#{third[:name]} #{third[:leaderboard] |> Enum.sum()}"
 

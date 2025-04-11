@@ -1,7 +1,3 @@
-Code.require_file("player.exs")
-Code.require_file("table-manager.exs")
-Code.require_file("messages.exs")
-
 defmodule SimpleServer do
   def start(port) do
     {:ok, socket} =
@@ -15,7 +11,7 @@ defmodule SimpleServer do
     {:ok, client} = :gen_tcp.accept(socket)
 
     IO.puts("Client connected")
-    {:ok, pid} = Player.start_link(client)
+    {:ok, pid} = Actors.Player.start_link(client)
     spawn(fn -> handle_client(client, pid) end)
 
     :gen_tcp.send(client, Messages.title())
@@ -36,10 +32,10 @@ defmodule SimpleServer do
 
                 send(self(), :stop)
                 :gen_tcp.close(client)
-                Player.stop(pid)
+                Actors.Player.stop(pid)
 
               no_white_spaces ->
-                Player.forward_data(pid, no_white_spaces)
+                Actors.Player.forward_data(pid, no_white_spaces)
                 handle_client(client, pid)
             end).()
 
@@ -66,5 +62,5 @@ defmodule SimpleServer do
   end
 end
 
-TableManager.start_link()
+Actors.TableManager.start_link()
 SimpleServer.start(4000)

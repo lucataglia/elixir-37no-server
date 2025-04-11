@@ -1,9 +1,4 @@
-Code.require_file("deck.exs")
-Code.require_file("table-manager.exs")
-Code.require_file("messages.exs")
-Code.require_file("utils/regex-utils.exs")
-
-defmodule Player do
+defmodule Actors.Player do
   use GenServer
 
   defp init_state(client) do
@@ -51,7 +46,7 @@ defmodule Player do
   # STATE - UNNAMED
   @impl true
   def handle_cast({:recv, name}, %{behavior: :unnamed} = state) do
-    case RegexUtils.check_player_name(name) do
+    case Utils.Regex.check_player_name(name) do
       {:error, :too_short} ->
         GenServer.cast(self(), {:warning, Messages.name_too_short()})
         {:noreply, state}
@@ -65,9 +60,9 @@ defmodule Player do
         {:noreply, state}
 
       :ok ->
-        case TableManager.check_if_name_is_available(name) do
+        case Actors.TableManager.check_if_name_is_available(name) do
           true ->
-            TableManager.add_player(self(), name)
+            Actors.TableManager.add_player(self(), name)
 
             GenServer.cast(self(), {:success, Messages.name_is_valid(name)})
 
@@ -107,7 +102,7 @@ defmodule Player do
         {:recv, data},
         %{game_state: game_state, deck: deck, name: name, behavior: :dealer} = state
       ) do
-    case RegexUtils.is_valid_card_key(data) do
+    case Utils.Regex.is_valid_card_key(data) do
       {:error, :invalid_input} ->
         piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
         GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
@@ -124,10 +119,10 @@ defmodule Player do
           if Map.has_key?(cards, String.to_atom(data)) do
             case Deck.is_a_valid_card(data, cards, turn_first_card) do
               :ok ->
-                TableManager.send_choice(name, choice)
+                Actors.TableManager.send_choice(name, choice)
 
               {:ok, :change_ranking} ->
-                TableManager.send_choice(name, %{choice | ranking: 0})
+                Actors.TableManager.send_choice(name, %{choice | ranking: 0})
 
               {:error, :wrong_suit} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
@@ -163,7 +158,7 @@ defmodule Player do
   end
 
   def handle_cast({:end_game, game_state}, %{name: name, behavior: :dealer} = state) do
-    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_continue()])
+    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
     GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
@@ -189,7 +184,7 @@ defmodule Player do
   end
 
   def handle_cast({:end_game, game_state}, %{name: name, behavior: :better} = state) do
-    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_continue()])
+    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
     GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
@@ -197,14 +192,24 @@ defmodule Player do
 
   # STATE - END GAME
   def handle_cast({:recv, data}, %{name: name, behavior: :end_game} = state) do
-    if data == "replay" do
-      TableManager.replay(name)
-    end
+    case Utils.Regex.check_end_game_input(data) do
+      {:replay} ->
+        Actors.TableManager.replay(name)
+        {:noreply, %{state | behavior: :ready_to_replay}}
 
-    {:noreply, %{state | behavior: :ready_to_replay}}
+      {:error, :invalid_input} ->
+        GenServer.cast(self(), {:warning, Messages.end_game_invalid_input()})
+        {:noreply, state}
+    end
   end
 
   # STATE - READY TO REPLY
+  def handle_cast({:recv, _}, %{behavior: :ready_to_replay} = state) do
+    GenServer.cast(self(), {:warning, Messages.ready_to_replay_invalid_input()})
+
+    {:noreply, state}
+  end
+
   def handle_cast({:dealer, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
     GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
 
