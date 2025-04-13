@@ -21,13 +21,7 @@ defmodule Messages do
   def new_player_arrived(players_name, count) do
     player_word = if count == 1, do: "player", else: "players"
 
-    "Players: #{players_name}\nWaiting for other #{count} #{player_word}...\n"
-  end
-
-  def player_opt_out(players_name, count, name) do
-    player_word = if count == 1, do: "player", else: "players"
-
-    "#{name} opt_out 🚫\nPlayers: #{players_name}\nWaiting for other #{count} #{player_word}...\n"
+    "\nPlayers: #{players_name}\nWaiting for other #{count} #{player_word}...\n"
   end
 
   def name_too_short(), do: "Name must be at least 3 characters\n"
@@ -134,8 +128,6 @@ defmodule Messages do
       else
         me[:name]
       end
-
-    IO.puts("#{p1[:is_stopped]} #{p2[:is_stopped]}  #{me[:is_stopped]}")
 
     p1i =
       case p1[:is_stopped] do

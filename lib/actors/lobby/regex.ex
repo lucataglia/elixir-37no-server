@@ -12,7 +12,7 @@ defmodule Actors.Lobby.Regex do
       "back" ->
         {:ok, :opt_out}
 
-      true ->
+      _ ->
         {:error, :invalid_input}
     end
   end

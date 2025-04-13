@@ -8,8 +8,6 @@ defmodule Actors.Login.Regex do
   end
 
   def check_username_and_password(str) do
-    IO.puts(str)
-
     cond do
       str =~ ~r/^[A-Za-z]{3,10} \d{6}$/ ->
         [name, password] = String.split(str, " ")

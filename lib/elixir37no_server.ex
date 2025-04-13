@@ -22,8 +22,6 @@ defmodule SimpleServer do
     {:ok, pid} = Actors.Bridge.start_link(client)
     spawn(fn -> handle_client(client, pid) end)
 
-    :gen_tcp.send(client, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}")
-
     accept_connections(socket)
   end
 

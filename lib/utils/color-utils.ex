@@ -1,9 +1,9 @@
 defmodule Utils.Colors do
-  @underline "\u001b[0004m"
-  @nc "\u001b[0;0m"
+  @underline "\u001b[4m"
+  @stop_underline "\u001b[24m"
 
   def withUnderline(str) do
-    "#{@underline}#{str}#{@nc}"
+    "#{@underline}#{str}#{@stop_underline}"
   end
 
   def withYellow(str) do

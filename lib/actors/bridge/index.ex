@@ -63,7 +63,7 @@ defmodule Actors.Bridge do
   # GOTO MENU - Actor.Login new recipient
   @impl true
   def handle_cast({:goto_menu}, %{client: client} = state) do
-    {:game, %{state | recipient_actor: Actors.Login.start_link(client, self())}}
+    {:game, %{state | recipient_actor: Actors.Login.start_link(client)}}
   end
 
   # DEGUB that march everything
@@ -84,10 +84,7 @@ defmodule Actors.Bridge do
 
   # *** Public api ***
   def forward_data(pid, data) do
-    cond do
-      data == "" -> GenServer.cast(pid, {:warning, "Invalid input"})
-      data != "" -> GenServer.cast(pid, {:recv, data})
-    end
+    GenServer.cast(pid, {:recv, data})
   end
 
   def stop(pid) do

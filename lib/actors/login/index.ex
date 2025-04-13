@@ -28,6 +28,12 @@ defmodule Actors.Login do
   end
 
   @impl true
+  def handle_cast({:warning, head, msg}, %{client: client} = state) do
+    :gen_tcp.send(client, "#{head}#{Messages.warning(msg)}")
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_cast({:success, msg}, %{client: client} = state) do
     :gen_tcp.send(client, Messages.success(msg))
     {:noreply, state}
@@ -53,7 +59,11 @@ defmodule Actors.Login do
         {:noreply, %{state | behavior: :sign_up}}
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu_invalid_input()}"})
+        GenServer.cast(
+          self(),
+          {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}\n\n", "#{Actors.Login.Messages.menu_invalid_input(data)}"}
+        )
+
         {:noreply, state}
     end
   end
@@ -75,16 +85,28 @@ defmodule Actors.Login do
             {:stop, :normal, state}
 
           [{^name, _}] ->
-            GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n#{Actors.Login.Messages.invalid_credentials()}"})
+            GenServer.cast(
+              self(),
+              {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n", "#{Actors.Login.Messages.invalid_credentials(name, password)}"}
+            )
+
             {:noreply, state}
 
           [] ->
-            GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n#{Actors.Login.Messages.invalid_credentials()}"})
+            GenServer.cast(
+              self(),
+              {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n", "#{Actors.Login.Messages.invalid_credentials(name, password)}"}
+            )
+
             {:noreply, state}
         end
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n#{Actors.Login.Messages.invalid_credentials()}"})
+        GenServer.cast(
+          self(),
+          {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n", "#{Actors.Login.Messages.sign_in_invalid_input(data)}"}
+        )
+
         {:noreply, state}
     end
   end
@@ -111,12 +133,20 @@ defmodule Actors.Login do
 
           # Username already exists
           _ ->
-            GenServer.cast(self(), {:warning, Actors.Login.Messages.username_already_exist(name)})
+            GenServer.cast(
+              self(),
+              {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}\n\n", Actors.Login.Messages.username_already_exist(name)}
+            )
+
             {:noreply, state}
         end
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}\n\n#{Actors.Login.Messages.menu_invalid_input()}"})
+        GenServer.cast(
+          self(),
+          {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}\n\n", "#{Actors.Login.Messages.sign_up_invalid_input(data)}"}
+        )
+
         {:noreply, state}
     end
   end
@@ -133,6 +163,8 @@ defmodule Actors.Login do
   @impl true
   def init(initial_state) do
     IO.puts("Actor.Login init" <> inspect(self()))
+
+    GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}"})
 
     {:ok, initial_state}
   end

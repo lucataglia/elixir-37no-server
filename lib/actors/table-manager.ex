@@ -81,79 +81,90 @@ defmodule Actors.TableManager do
 
   # LOGIN
   @impl true
-  def handle_cast(
+  def handle_call(
         {:new_player, pid, name},
+        _from,
         %{game_state: game_state, deck: deck, behavior: :opt_in} = state
       ) do
     dealer_index = game_state[:dealer_index]
 
-    new_dealer_index =
-      case dealer_index do
-        nil -> Enum.random(0..2)
-        _ -> dealer_index
-      end
-
     players = game_state[:players]
     count = (players |> Map.keys() |> length) + 1
 
-    new_player = %{
-      pid: pid,
-      name: name,
-      points: 0,
-      index: count - 1,
-      current: nil,
-      leaderboard: [],
-      stack: [],
-      cards: Map.new(Enum.at(deck, count - 1)),
-      is_looser: false,
-      is_stopped: false
-    }
+    case Map.has_key?(players, name) do
+      true ->
+        {:reply, {:error, :user_already_registered}, state}
 
-    new_players = Map.put(players, name, new_player)
-    new_game_state = %{game_state | players: new_players, dealer_index: new_dealer_index}
+      false ->
+        new_player = %{
+          pid: pid,
+          name: name,
+          points: 0,
+          index: count - 1,
+          current: nil,
+          leaderboard: [],
+          stack: [],
+          cards: Map.new(Enum.at(deck, count - 1)),
+          is_looser: false,
+          is_stopped: false
+        }
 
-    if count < 3 do
-      Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
-        players_name =
-          Enum.to_list(new_players)
-          |> Enum.map(fn {_, %{name: n}} -> n end)
-          |> Enum.join(" ")
+        new_players = Map.put(players, name, new_player)
+        new_game_state = %{game_state | players: new_players}
 
-        msg = Messages.new_player_arrived(players_name, 3 - count)
+        if count < 3 do
+          Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
+            players_name =
+              Enum.to_list(new_players)
+              |> Enum.map(fn {_, %{name: n}} -> n end)
+              |> Enum.join(" ")
 
-        GenServer.cast(p, {:success, msg})
-      end)
+            msg = Messages.new_player_arrived(players_name, 3 - count)
 
-      {:noreply, %{state | game_state: new_game_state, game_dealer_index: new_dealer_index, behavior: :opt_in}}
-    else
-      Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
-        if i == new_dealer_index do
-          GenServer.cast(p, {:dealer, new_game_state})
+            GenServer.cast(p, {:success, msg})
+          end)
+
+          {:reply, {:ok, :user_opted_in}, %{state | game_state: new_game_state, behavior: :opt_in}}
         else
-          GenServer.cast(p, {:better, new_game_state})
-        end
-      end)
+          Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
+            GenServer.cast(p, {:game_start})
 
-      {:noreply, %{state | game_state: new_game_state, game_dealer_index: new_dealer_index, behavior: :game}}
+            if i == dealer_index do
+              GenServer.cast(p, {:dealer, new_game_state})
+            else
+              GenServer.cast(p, {:better, new_game_state})
+            end
+          end)
+
+          {:reply, {:ok, :game_start}, %{state | game_state: new_game_state, behavior: :game}}
+        end
     end
   end
 
   # REMOVE PLAYER
   @impl true
-  def handle_cast({:remove_player, name}, %{game_state: game_state, behavior: :opt_in} = state) do
-    new_players = Map.delete(game_state[:players], name)
-    new_game_state = %{game_state | players: new_players}
+  def handle_call({:remove_player, name}, _from, %{game_state: game_state, behavior: :opt_in} = state) do
+    players = game_state[:players]
 
-    players_name =
-      Enum.to_list(new_players)
-      |> Enum.map(fn {_, %{name: n}} -> n end)
-      |> Enum.join(" ")
+    case Map.has_key?(players, name) do
+      false ->
+        {:reply, {:error, :user_not_registered}, state}
 
-    Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
-      GenServer.cast(p, {:success, Messages.player_opt_out(players_name, name, map_size(new_players))})
-    end)
+      true ->
+        new_players = Map.delete(game_state[:players], name)
+        new_game_state = %{game_state | players: new_players}
 
-    {:noreply, %{state | game_state: new_game_state}}
+        players_name =
+          Enum.to_list(new_players)
+          |> Enum.map(fn {_, %{name: n}} -> n end)
+          |> Enum.join(" ")
+
+        Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
+          GenServer.cast(p, {:success, Actors.Lobby.Messages.player_opt_out(players_name, name, map_size(new_players))})
+        end)
+
+        {:reply, {:ok, Actors.Lobby.Messages.opt_out_success()}, %{state | game_state: new_game_state}}
+    end
   end
 
   # GAME
@@ -423,18 +434,25 @@ defmodule Actors.TableManager do
   def init(initial_state) do
     IO.puts("Table Manager init")
 
-    {:ok, initial_state}
+    new_dealer_index = Enum.random(0..2)
+
+    {:ok,
+     %{
+       initial_state
+       | game_dealer_index: new_dealer_index,
+         game_state: %{initial_state[:game_state] | dealer_index: new_dealer_index}
+     }}
   end
 
   # LOBBY
 
   # *** Public api ***
   def add_player(pid, name) do
-    GenServer.cast(:tablemanager, {:new_player, pid, name})
+    GenServer.call(:tablemanager, {:new_player, pid, name})
   end
 
   def remove_player(name) do
-    GenServer.cast(:tablemanager, {:remove_player, name})
+    GenServer.call(:tablemanager, {:remove_player, name})
   end
 
   def check_if_name_is_available(name) do
