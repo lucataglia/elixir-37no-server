@@ -1,4 +1,4 @@
-defmodule Actors.Login.Regex do
+defmodule Actors.Bridge.Regex do
   def check_menu_input(str) do
     case str do
       "a" -> {:ok, :sign_in}

@@ -24,6 +24,12 @@ defmodule Messages do
     "Players: #{players_name}\nWaiting for other #{count} #{player_word}...\n"
   end
 
+  def player_opt_out(players_name, count, name) do
+    player_word = if count == 1, do: "player", else: "players"
+
+    "#{name} opt_out 🚫\nPlayers: #{players_name}\nWaiting for other #{count} #{player_word}...\n"
+  end
+
   def name_too_short(), do: "Name must be at least 3 characters\n"
   def name_too_long(), do: "Name must be less than 10 characters\n"
   def name_contains_invalid_chars(), do: "Name must contains only letters or numbers\n"

@@ -5,6 +5,11 @@ defmodule SimpleServer do
 
     Actors.TableManager.start_link()
 
+    # CREATE TABLES
+    :ets.new(:users, [:set, :public, :named_table])
+    IO.puts("ETS table :users created.")
+    # END CREATE TABLES
+
     IO.puts("Server listening on port #{port}")
     accept_connections(socket)
   end
@@ -14,11 +19,10 @@ defmodule SimpleServer do
 
     IO.puts("Client connected")
 
-    {:ok, pid} = Actors.Player.start_link(client)
+    {:ok, pid} = Actors.Bridge.start_link(client)
     spawn(fn -> handle_client(client, pid) end)
 
-    :gen_tcp.send(client, Messages.title())
-    :gen_tcp.send(client, "Pick a name (only letters and numbers, no whitespaces): ")
+    :gen_tcp.send(client, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}")
 
     accept_connections(socket)
   end
@@ -27,7 +31,7 @@ defmodule SimpleServer do
     case read_line(client) do
       {:ok, data} ->
         data
-        |> String.replace(~r/\s+/, "")
+        |> String.trim()
         |> String.downcase()
         |> (fn
               "exit" ->
@@ -35,15 +39,15 @@ defmodule SimpleServer do
 
                 send(self(), :stop)
                 :gen_tcp.close(client)
-                Actors.Player.stop(pid)
+                Actors.Bridge.stop(pid)
 
               no_white_spaces ->
-                Actors.Player.forward_data(pid, no_white_spaces)
+                Actors.Bridge.forward_data(pid, no_white_spaces)
                 handle_client(client, pid)
             end).()
 
       {:error, :closed} ->
-        Actors.Player.stop(pid)
+        Actors.Bridge.stop(pid)
         IO.puts("Client disconnected")
 
       {:error, reason} ->

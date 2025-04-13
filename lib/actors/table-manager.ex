@@ -5,7 +5,7 @@ defmodule Actors.TableManager do
 
   defp init_state(),
     do: %{
-      behavior: :login,
+      behavior: :opt_in,
       deck: Deck.shuffle(),
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
@@ -83,7 +83,7 @@ defmodule Actors.TableManager do
   @impl true
   def handle_cast(
         {:new_player, pid, name},
-        %{game_state: game_state, deck: deck, behavior: :login} = state
+        %{game_state: game_state, deck: deck, behavior: :opt_in} = state
       ) do
     dealer_index = game_state[:dealer_index]
 
@@ -114,17 +114,17 @@ defmodule Actors.TableManager do
 
     if count < 3 do
       Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
-        playersName =
+        players_name =
           Enum.to_list(new_players)
           |> Enum.map(fn {_, %{name: n}} -> n end)
           |> Enum.join(" ")
 
-        msg = Messages.new_player_arrived(playersName, 3 - count)
+        msg = Messages.new_player_arrived(players_name, 3 - count)
 
         GenServer.cast(p, {:success, msg})
       end)
 
-      {:noreply, %{state | game_state: new_game_state, game_dealer_index: new_dealer_index, behavior: :login}}
+      {:noreply, %{state | game_state: new_game_state, game_dealer_index: new_dealer_index, behavior: :opt_in}}
     else
       Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
         if i == new_dealer_index do
@@ -136,6 +136,24 @@ defmodule Actors.TableManager do
 
       {:noreply, %{state | game_state: new_game_state, game_dealer_index: new_dealer_index, behavior: :game}}
     end
+  end
+
+  # REMOVE PLAYER
+  @impl true
+  def handle_cast({:remove_player, name}, %{game_state: game_state, behavior: :opt_in} = state) do
+    new_players = Map.delete(game_state[:players], name)
+    new_game_state = %{game_state | players: new_players}
+
+    players_name =
+      Enum.to_list(new_players)
+      |> Enum.map(fn {_, %{name: n}} -> n end)
+      |> Enum.join(" ")
+
+    Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
+      GenServer.cast(p, {:success, Messages.player_opt_out(players_name, name, map_size(new_players))})
+    end)
+
+    {:noreply, %{state | game_state: new_game_state}}
   end
 
   # GAME
@@ -413,6 +431,10 @@ defmodule Actors.TableManager do
   # *** Public api ***
   def add_player(pid, name) do
     GenServer.cast(:tablemanager, {:new_player, pid, name})
+  end
+
+  def remove_player(name) do
+    GenServer.cast(:tablemanager, {:remove_player, name})
   end
 
   def check_if_name_is_available(name) do

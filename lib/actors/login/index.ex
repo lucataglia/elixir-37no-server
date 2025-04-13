@@ -1,18 +1,17 @@
 defmodule Actors.Login do
   use GenServer
 
-  defp init_state(client, bridge_actor) do
+  defp init_state(client) do
     %{
       behavior: :menu,
-      client: client,
-      bridge_actor: bridge_actor
+      client: client
     }
   end
 
-  def start_link(client, bridge_actor) do
-    IO.puts("Actor.Login start_link")
+  def start_link(client) do
+    IO.puts("Actor.Login start_link [caller pid]" <> inspect(self()))
 
-    GenServer.start_link(__MODULE__, init_state(client, bridge_actor))
+    GenServer.start_link(__MODULE__, init_state(client))
   end
 
   # PRINT MESSAGES
@@ -43,46 +42,81 @@ defmodule Actors.Login do
 
   # STATE - MENU
   @impl true
-  def handle_cast({:recv, data}, %{behavior: :menu} = state) do
+  def handle_cast({:recv, data, _}, %{behavior: :menu} = state) do
     case Actors.Login.Regex.check_menu_input(data) do
       {:ok, :sign_in} ->
-        GenServer.cast(self(), {:warning, Actors.Login.Messages.sign_in()})
+        GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}"})
         {:noreply, %{state | behavior: :sign_in}}
 
       {:ok, :sign_up} ->
-        GenServer.cast(self(), {:warning, Actors.Login.Messages.sign_up()})
+        GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}"})
         {:noreply, %{state | behavior: :sign_up}}
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, Actors.Login.Messages.menu_invalid_input()})
+        GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu_invalid_input()}"})
         {:noreply, state}
     end
   end
 
   # STATE - SIGN IN
   @impl true
-  def handle_cast({:recv, data}, %{bridge_actor: bridge_actor, behavior: :sign_in} = state) do
+  def handle_cast({:recv, data, bridge_actor}, %{behavior: :sign_in} = state) do
     case Actors.Login.Regex.check_username_and_password(data) do
+      {:ok, :back} ->
+        GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}"})
+        {:noreply, %{state | behavior: :menu}}
+
       {:ok, name, password} ->
-        GenServer.cast(bridge_actor, {:goto_game})
-        {:stop, :normal, state}
+        case :ets.lookup(:users, name) do
+          [{^name, ^password}] ->
+            IO.puts("Login successful for user #{name}.")
+
+            GenServer.cast(bridge_actor, {:goto_lobby, name})
+            {:stop, :normal, state}
+
+          [{^name, _}] ->
+            GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n#{Actors.Login.Messages.invalid_credentials()}"})
+            {:noreply, state}
+
+          [] ->
+            GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n#{Actors.Login.Messages.invalid_credentials()}"})
+            {:noreply, state}
+        end
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, Actors.Login.Messages.sign_in() <> "\n\n" <> Actors.Login.Messages.menu_invalid_input()})
+        GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n#{Actors.Login.Messages.invalid_credentials()}"})
         {:noreply, state}
     end
   end
 
   # STATE - SIGN UP
   @impl true
-  def handle_cast({:recv, data}, %{bridge_actor: bridge_actor, behavior: :sign_up} = state) do
+  def handle_cast({:recv, data, bridge_actor}, %{behavior: :sign_up} = state) do
     case Actors.Login.Regex.check_username_and_password(data) do
+      {:ok, :back} ->
+        GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}"})
+        {:noreply, %{state | behavior: :menu}}
+
       {:ok, name, password} ->
-        GenServer.cast(bridge_actor, {:goto_game})
-        {:stop, :normal, state}
+        # Check the database
+        case :ets.lookup(:users, name) do
+          # Username is available, insert it
+          [] ->
+            # TODO: hashing the password before writing 
+            :ets.insert(:users, {name, password})
+
+            IO.puts("User #{name} signed up successfully.")
+            GenServer.cast(bridge_actor, {:goto_lobby, name})
+            {:stop, :normal, state}
+
+          # Username already exists
+          _ ->
+            GenServer.cast(self(), {:warning, Actors.Login.Messages.username_already_exist(name)})
+            {:noreply, state}
+        end
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, Actors.Login.Messages.sign_up() <> "\n\n" <> Actors.Login.Messages.menu_invalid_input()})
+        GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}\n\n#{Actors.Login.Messages.menu_invalid_input()}"})
         {:noreply, state}
     end
   end
@@ -98,6 +132,8 @@ defmodule Actors.Login do
 
   @impl true
   def init(initial_state) do
+    IO.puts("Actor.Login init" <> inspect(self()))
+
     {:ok, initial_state}
   end
 end

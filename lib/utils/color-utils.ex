@@ -1,4 +1,11 @@
 defmodule Utils.Colors do
+  @underline "\u001b[0004m"
+  @nc "\u001b[0;0m"
+
+  def withUnderline(str) do
+    "#{@underline}#{str}#{@nc}"
+  end
+
   def withYellow(str) do
     IO.ANSI.format([:yellow, str])
   end
