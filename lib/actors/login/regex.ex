@@ -1,4 +1,8 @@
 defmodule Actors.Login.Regex do
+  @moduledoc """
+  Actors.Login.Regex
+  """
+
   def check_menu_input(str) do
     case str do
       "a" -> {:ok, :sign_in}

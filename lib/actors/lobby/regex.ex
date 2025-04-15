@@ -1,4 +1,8 @@
 defmodule Actors.Lobby.Regex do
+  @moduledoc """
+  Actors.Lobby.Regex
+  """
+
   def check_game_opt_in(str) do
     case str do
       "play" -> {:ok, :opt_in}

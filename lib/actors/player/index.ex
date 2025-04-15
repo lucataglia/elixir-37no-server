@@ -1,20 +1,25 @@
 defmodule Actors.Player do
+  @moduledoc """
+  Actors.Player
+  """
+
   use GenServer
 
-  defp init_state(client) do
+  defp init_state(client, name, parent_pid) do
     %{
-      behavior: :unnamed,
+      behavior: :init,
       client: client,
+      parent_pid: parent_pid,
       deck: Deck.factory(),
-      name: "",
+      name: name,
       game_state: %{}
     }
   end
 
-  def start_link(client) do
+  def start_link(client, name, parent_pid) do
     IO.puts("Player start_link")
 
-    GenServer.start_link(__MODULE__, init_state(client))
+    GenServer.start_link(__MODULE__, init_state(client, name, parent_pid))
   end
 
   # PRINT MESSAGES
@@ -39,67 +44,37 @@ defmodule Actors.Player do
   # GAME STATE UPDATE (e.g. some player exit the game)
   @impl true
   def handle_cast({:game_state_update, new_game_state, piggiback}, %{name: n} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.withYellow(piggiback))})
+    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
     {:noreply, %{state | game_state: new_game_state}}
   end
 
-  # STOP
+  # Handle :DOWN message when the parent dies
   @impl true
-  def handle_cast({:stop}, %{name: n} = state) do
-    Actors.TableManager.player_stop(n)
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, behavior: :opted_in} = state) do
+    IO.puts("Parent process stopped with reason: #{inspect(reason)}")
+
+    # Perform cleanup or other actions before stopping
+    Actors.TableManager.player_stop(name)
+
     {:stop, :normal, state}
   end
 
-  # STATE - UNNAMED (TO BE MOVED INTO THE ACTOR.LOGIN
-  @impl true
-  def handle_cast({:recv, name}, %{behavior: :unnamed} = state) do
-    case Utils.Regex.check_player_name(name) do
-      {:error, :too_short} ->
-        GenServer.cast(self(), {:warning, Messages.name_too_short()})
-        {:noreply, state}
+  # STATE - INIT
 
-      {:error, :too_long} ->
-        GenServer.cast(self(), {:warning, Messages.name_too_long()})
-        {:noreply, state}
+  def handle_cast({:dealer, game_state}, %{name: n, parent_pid: parent_pid, behavior: :init} = state) do
+    GenServer.cast(parent_pid, {:game_start})
 
-      {:error, :invalid_chars} ->
-        GenServer.cast(self(), {:warning, Messages.name_contains_invalid_chars()})
-        {:noreply, state}
-
-      :ok ->
-        case Actors.TableManager.check_if_name_is_available(name) do
-          true ->
-            Actors.TableManager.add_player(self(), name)
-
-            GenServer.cast(self(), {:success, Messages.name_is_valid(name)})
-
-            new_state = %{state | name: name, behavior: :login}
-            {:noreply, new_state}
-
-          false ->
-            GenServer.cast(self(), {:warning, Messages.name_already_taken(name)})
-            {:noreply, state}
-        end
-    end
-  end
-
-  # STATE - LOGIN
-
-  @impl true
-  def handle_cast({:recv, _}, %{behavior: :login} = state) do
-    GenServer.cast(self(), {:warning, Messages.wait_for_game_start()})
-
-    {:noreply, state}
-  end
-
-  def handle_cast({:dealer, game_state}, %{name: n, behavior: :login} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+    # Print the table with good luck
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, n, Actors.Player.Messages.good_luck())})
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
-  def handle_cast({:better, game_state}, %{name: n, behavior: :login} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({:better, game_state}, %{name: n, parent_pid: parent_pid, behavior: :init} = state) do
+    GenServer.cast(parent_pid, {:game_start})
+
+    # Print the table with good luck
+    GenServer.cast(self(), {:message, Messages.print_table(game_state, n, Actors.Player.Messages.good_luck())})
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
@@ -109,7 +84,7 @@ defmodule Actors.Player do
         {:recv, data},
         %{game_state: game_state, deck: deck, name: name, behavior: :dealer} = state
       ) do
-    case Utils.Regex.is_valid_card_key(data) do
+    case Utils.Regex.check_is_valid_card_key(data) do
       {:error, :invalid_input} ->
         piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
         GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
@@ -124,7 +99,7 @@ defmodule Actors.Player do
 
         if choice do
           if Map.has_key?(cards, String.to_atom(data)) do
-            case Deck.is_a_valid_card(data, cards, turn_first_card) do
+            case Deck.check_card_is_valid(data, cards, turn_first_card) do
               :ok ->
                 Actors.TableManager.send_choice(name, choice)
 
@@ -231,7 +206,7 @@ defmodule Actors.Player do
 
   # DEGUB that march everything
   def handle_cast({x, _}, state) do
-    IO.inspect("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    IO.puts("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -239,7 +214,12 @@ defmodule Actors.Player do
   # - - -
 
   @impl true
-  def init(initial_state) do
+  def init(%{parent_pid: parent_pid} = initial_state) do
+    IO.puts("Actor.Player init" <> inspect(self()))
+    IO.puts("Actor.Player monitor" <> inspect(parent_pid))
+
+    Process.monitor(parent_pid)
+
     {:ok, initial_state}
   end
 

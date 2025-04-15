@@ -1,4 +1,8 @@
 defmodule SimpleServer do
+  @moduledoc """
+  SimpleServer
+  """
+
   def start(_, [port]) do
     {:ok, socket} =
       :gen_tcp.listen(port, [:binary, packet: :line, active: false, reuseaddr: true])

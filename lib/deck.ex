@@ -1,4 +1,8 @@
 defmodule Deck do
+  @moduledoc """
+  Deck
+  """
+
   # 1. comment factory
   # 2. change the chunk_every function arg
   # 3. change the 39 hardcoded into the table-manager
@@ -61,7 +65,7 @@ defmodule Deck do
       "3s": %{key: "3s", label: "Three of Spades", suit: "spades", pretty: "3 ⚫️", ranking: 10, sort_id: 40, points: 0.34, used: false}
     }
 
-  def is_a_valid_card(key, cards, turn_first_card) do
+  def check_card_is_valid(key, cards, turn_first_card) do
     card = cards[String.to_atom(key)]
 
     if card do

@@ -1,22 +1,42 @@
 defmodule Actors.Lobby do
+  @moduledoc """
+  Actors.Lobby
+  """
+
   use GenServer
 
-  defp init_state(client, bridge_actor, player_actor, name) do
+  defp init_state(client, name, parent_pid) do
     %{
       behavior: :lobby,
       client: client,
       name: name,
-      bridge_actor: bridge_actor,
-      player_actor: player_actor
+      parent_pid: parent_pid,
+      player_actor: nil
     }
   end
 
-  def start_link(client, bridge_actor, name) do
-    IO.puts("Actor.Lobby start_link")
+  def start_link(client, name, parent_pid) do
+    IO.puts("Actor.Lobby start_link " <> inspect(self()))
 
-    {:ok, pid} = Actors.Player.start_link(client)
+    GenServer.start_link(__MODULE__, init_state(client, name, parent_pid))
+  end
 
-    GenServer.start_link(__MODULE__, init_state(client, bridge_actor, pid, name))
+  # Handle :DOWN message when the parent dies
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, behavior: :opted_in} = state) do
+    IO.puts("Parent process stopped with reason: #{inspect(reason)}")
+
+    # Perform cleanup or other actions before stopping
+    Actors.TableManager.remove_player(name)
+
+    {:stop, :normal, state}
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+    IO.puts("Parent process stopped with reason: #{inspect(reason)}")
+
+    {:stop, :normal, state}
   end
 
   # PRINT MESSAGES
@@ -56,15 +76,9 @@ defmodule Actors.Lobby do
     {:stop, :normal, state}
   end
 
-  @impl true
-  def handle_cast({:stop}, %{name: name, behavior: :opted_in} = state) do
-    Actors.TableManager.remove_player(name)
-    {:stop, :normal, state}
-  end
-
   # STATE - LOBBY
   @impl true
-  def handle_cast({:recv, data, _}, %{name: name, player_actor: player_actor, behavior: :lobby} = state) do
+  def handle_cast({:recv, data}, %{name: name, player_actor: player_actor, behavior: :lobby} = state) do
     case Actors.Lobby.Regex.check_game_opt_in(data) do
       {:ok, :opt_in} ->
         case Actors.TableManager.add_player(player_actor, name) do
@@ -72,8 +86,8 @@ defmodule Actors.Lobby do
             GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", Actors.Lobby.Messages.user_already_opted_in(name)})
             {:noreply, state}
 
-          {:ok, :user_opted_in} ->
-            GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n"})
+          {:ok, :user_opted_in, msg} ->
+            GenServer.cast(self(), {:success, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", msg})
             {:noreply, %{state | behavior: :opted_in}}
 
           {:ok, :game_start} ->
@@ -89,13 +103,13 @@ defmodule Actors.Lobby do
 
   # STATE - REGISTERED
   @impl true
-  def handle_cast({:recv, data, _}, %{name: name, behavior: :opted_in} = state) do
+  def handle_cast({:recv, data}, %{name: name, behavior: :opted_in} = state) do
     case Actors.Lobby.Regex.check_game_opt_out(data) do
       {:ok, :opt_out} ->
         case Actors.TableManager.remove_player(name) do
           # TODO: write a meaningfull error
           {:error, :user_not_registered} ->
-            GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", "Generic error"})
+            GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", "Player #{name} cannot be removed from that game because he didn't do the opt-in"})
             {:noreply, state}
 
           {:ok, msg} ->
@@ -111,21 +125,21 @@ defmodule Actors.Lobby do
 
   @impl true
   def handle_cast({:game_start}, %{behavior: :opted_in} = state) do
-    {:noreply, %{state | behavior: :game_start}}
+    {:noreply, %{state | behavior: :forward_everything_to_player_actor}}
   end
 
   # STATE - GAME START
   @impl true
-  def handle_cast({:recv, _, _} = envelop, %{player_actor: player_actor, behavior: :game_start} = state) do
+  def handle_cast({:recv, _} = envelop, %{player_actor: player_actor, behavior: :forward_everything_to_player_actor} = state) do
     GenServer.cast(player_actor, envelop)
     # GenServer.cast(player_actor, Tuple.insert_at(envelop, tuple_size(envelop), self()))
 
     {:noreply, state}
   end
 
-  # DEGUB that march everything
+  # DEGUB that match everything
   def handle_cast({x, _}, state) do
-    IO.inspect("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    IO.puts("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -133,9 +147,16 @@ defmodule Actors.Lobby do
   # - - -
 
   @impl true
-  def init(initial_state) do
+  def init(%{client: client, name: name, parent_pid: parent_pid} = initial_state) do
+    IO.puts("Actor.Lobby init" <> inspect(self()))
+    IO.puts("Actor.Lobby monitor" <> inspect(parent_pid))
+
+    Process.monitor(parent_pid)
+
+    {:ok, pid} = Actors.Player.start_link(client, name, self())
+
     GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}"})
 
-    {:ok, initial_state}
+    {:ok, %{initial_state | player_actor: pid}}
   end
 end

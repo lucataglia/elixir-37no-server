@@ -1,5 +1,9 @@
 defmodule Utils.Regex do
-  def is_valid_card_key(key) do
+  @moduledoc """
+  Utils.Regex
+  """
+
+  def check_is_valid_card_key(key) do
     case Enum.member?(
            [
              "4h",

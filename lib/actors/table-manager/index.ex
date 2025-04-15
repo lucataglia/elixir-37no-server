@@ -1,13 +1,13 @@
 # IO.puts("set card AFTER: " <> inspect(Map.put(game_state[:players][name], :current, card), pretty: true, syntax_colors: [atom: :cyan, string: :green]))
 
-defmodule Actors.TableManager do
+defmodule Actors.NewTableManager do
   @moduledoc """
-  Actor.TableManager
+  Actor.NewTableManager
   """
 
   use GenServer
 
-  defp init_state(),
+  defp init_state(raw_players),
     do: %{
       behavior: :opt_in,
       deck: Deck.shuffle(),
@@ -17,7 +17,7 @@ defmodule Actors.TableManager do
       current_turn: [],
 
       # Because the next game it must me (game_dealer_index + 1) % 3
-      game_dealer_index: nil,
+      game_dealer_index: 0,
 
       # User in STATE - REPLAY
       want_to_replay: [],
@@ -29,7 +29,7 @@ defmodule Actors.TableManager do
       #   leaderboard: []
       #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: nil, used_card_count: 0, info: "", turn_winner: "", players: %{}}
+      game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", players: raw_players}
     }
 
   defp end_game_init_state(there_is_a_looser, game_dealer_index, players),
@@ -58,8 +58,8 @@ defmodule Actors.TableManager do
       game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", players: players}
     }
 
-  def start_link() do
-    GenServer.start_link(__MODULE__, init_state(), name: :tablemanager)
+  def start_link(uuid, raw_players) do
+    GenServer.start_link(__MODULE__, init_state(raw_players), name: {:global, uuid})
   end
 
   # STOP
@@ -74,92 +74,6 @@ defmodule Actors.TableManager do
     end)
 
     {:noreply, %{state | game_state: new_game_state}}
-  end
-
-  # LOGIN
-  @impl true
-  def handle_call(
-        {:new_player, pid, name},
-        _from,
-        %{game_state: game_state, deck: deck, behavior: :opt_in} = state
-      ) do
-    dealer_index = game_state[:dealer_index]
-
-    players = game_state[:players]
-    count = (players |> Map.keys() |> length) + 1
-
-    case Map.has_key?(players, name) do
-      true ->
-        {:reply, {:error, :user_already_registered}, state}
-
-      false ->
-        new_player = %{
-          pid: pid,
-          name: name,
-          points: 0,
-          index: count - 1,
-          current: nil,
-          leaderboard: [],
-          stack: [],
-          cards: Map.new(Enum.at(deck, count - 1)),
-          is_looser: false,
-          is_stopped: false
-        }
-
-        new_players = Map.put(players, name, new_player)
-        new_game_state = %{game_state | players: new_players}
-
-        if count < 3 do
-          players_name =
-            Enum.to_list(players)
-            |> Enum.map(fn {_, %{name: n}} -> n end)
-            |> Enum.join(", ")
-
-          msg = Messages.new_player_arrived(players_name, 3 - count)
-
-          Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
-            GenServer.cast(p, {:success, msg})
-          end)
-
-          {:reply, {:ok, :user_opted_in, msg}, %{state | game_state: new_game_state, behavior: :opt_in}}
-        else
-          Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
-            if i == dealer_index do
-              GenServer.cast(p, {:dealer, new_game_state})
-            else
-              GenServer.cast(p, {:better, new_game_state})
-            end
-          end)
-
-          {:reply, {:ok, :game_start}, %{state | game_state: new_game_state, behavior: :game}}
-        end
-    end
-  end
-
-  # REMOVE PLAYER
-  @impl true
-  def handle_call({:remove_player, name}, _from, %{game_state: game_state, behavior: :opt_in} = state) do
-    players = game_state[:players]
-
-    case Map.has_key?(players, name) do
-      false ->
-        {:reply, {:error, :user_not_registered}, state}
-
-      true ->
-        new_players = Map.delete(game_state[:players], name)
-        new_game_state = %{game_state | players: new_players}
-
-        players_name =
-          Enum.to_list(new_players)
-          |> Enum.map(fn {_, %{name: n}} -> n end)
-          |> Enum.join(" ")
-
-        Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
-          GenServer.cast(p, {:success, Actors.Lobby.Messages.player_opt_out(players_name, name, map_size(new_players))})
-        end)
-
-        {:reply, {:ok, Actors.Lobby.Messages.opt_out_success()}, %{state | game_state: new_game_state}}
-    end
   end
 
   # GAME
@@ -423,39 +337,66 @@ defmodule Actors.TableManager do
   end
 
   @impl true
-  def init(initial_state) do
+  def init(%{deck: deck, game_state: game_state} = initial_state) do
     IO.puts("Table Manager init")
+    players = game_state[:players]
 
-    new_dealer_index = Enum.random(0..2)
+    [p1, p2, p3] =
+      Enum.shuffle(players)
+      |> Enum.to_list()
+      |> Enum.with_index()
+      |> Enum.map(fn {{name, pid}, index} ->
+        %{
+          pid: pid,
+          name: name,
+          points: 0,
+          index: index,
+          current: nil,
+          leaderboard: [],
+          stack: [],
+          cards: Map.new(Enum.at(deck, index)),
+          is_looser: false,
+          is_stopped: false
+        }
+      end)
+
+    new_players = %{p1[:name] => p1, p2[:name] => p2, p3[:name] => p3}
+
+    Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
+      if i == dealer_index do
+        GenServer.cast(p, {:dealer, new_game_state})
+      else
+        GenServer.cast(p, {:better, new_game_state})
+      end
+    end)
 
     {:ok,
      %{
        initial_state
-       | game_dealer_index: new_dealer_index,
-         game_state: %{initial_state[:game_state] | dealer_index: new_dealer_index}
+       | game_state: %{initial_state[:game_state] | players: new_players}
      }}
   end
 
   # LOBBY
 
   # *** Public api ***
-  def add_player(pid, name) do
-    GenServer.call(:tablemanager, {:new_player, pid, name})
+  def add_player(uuid, pid, name) do
+    GenServer.call({:global, uuid}, {:new_player, pid, name})
   end
 
-  def remove_player(name) do
-    GenServer.call(:tablemanager, {:remove_player, name})
+  def remove_player(uuid, name) do
+    GenServer.call({:global, uuid}, {:remove_player, name})
   end
 
-  def send_choice(name, card) do
-    GenServer.cast(:tablemanager, {:choice, name, card})
+  def send_choice(uuid, name, card) do
+    GenServer.cast({:global, uuid}, {:choice, name, card})
   end
 
-  def replay(name) do
-    GenServer.cast(:tablemanager, {:replay, name})
+  def replay(uuid, name) do
+    GenServer.cast({:global, uuid}, {:replay, name})
   end
 
-  def player_stop(name) do
-    GenServer.cast(:tablemanager, {:player_stop, name})
+  def player_stop(uuid, name) do
+    GenServer.cast({:global, uuid}, {:player_stop, name})
   end
 end

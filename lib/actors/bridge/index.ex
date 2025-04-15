@@ -1,21 +1,23 @@
 defmodule Actors.Bridge do
+  @moduledoc """
+  Actors.Bridge
+  """
+
   use GenServer
 
-  defp init_state(client, recipient_actor) do
+  defp init_state(client) do
     %{
-      behavior: :menu,
+      behavior: :login,
       client: client,
       name: nil,
-      recipient_actor: recipient_actor
+      recipient_actor: nil
     }
   end
 
   def start_link(client) do
     IO.puts("Actor.Bridge start_link" <> inspect(self()))
 
-    {:ok, pid} = Actors.Login.start_link(client)
-
-    GenServer.start_link(__MODULE__, init_state(client, pid))
+    GenServer.start_link(__MODULE__, init_state(client))
   end
 
   # PRINT MESSAGES
@@ -39,36 +41,46 @@ defmodule Actors.Bridge do
 
   # STOP
   @impl true
-  def handle_cast({:stop} = envelop, %{recipient_actor: recipient_actor} = state) do
-    GenServer.cast(recipient_actor, Tuple.insert_at(envelop, tuple_size(envelop), self()))
+  def handle_cast({:stop}, state) do
+    IO.puts("Actors.Bridge stop " <> inspect(self()))
     {:stop, :normal, state}
   end
 
-  # FORWARD EVERYTHING TO RECIPIENT
+  # FORWARD EVERYTHING Actor.Login
   @impl true
-  def handle_cast({:recv, _} = envelop, %{recipient_actor: recipient_actor} = state) do
-    GenServer.cast(recipient_actor, Tuple.insert_at(envelop, tuple_size(envelop), self()))
+  def handle_cast({:recv, _} = envelop, %{client: client, recipient_actor: recipient_actor, behavior: :login} = state) do
+    case GenServer.call(recipient_actor, envelop) do
+      {:ok, :goto_lobby, name} ->
+        IO.puts("GOTO lobby " <> inspect(self()))
+        {:ok, pid} = Actors.Lobby.start_link(client, name, self())
 
-    {:noreply, state}
+        {:noreply, %{state | name: name, recipient_actor: pid, behavior: :logged}}
+
+      {:ok, _} ->
+        {:noreply, state}
+
+      {:error, _} ->
+        {:noreply, state}
+    end
   end
 
-  # GOTO LOBBY - Actor.Lobby new recipient
+  # FORWARD EVERYTHING TO Actor.Lobby
   @impl true
-  def handle_cast({:goto_lobby, name}, %{client: client} = state) do
-    {:ok, pid} = Actors.Lobby.start_link(client, self(), name)
+  def handle_cast({:recv, _} = envelop, %{recipient_actor: recipient_actor, behavior: :logged} = state) do
+    GenServer.cast(recipient_actor, envelop)
 
-    {:noreply, %{state | name: name, recipient_actor: pid}}
+    {:noreply, state}
   end
 
   # GOTO MENU - Actor.Login new recipient
   @impl true
   def handle_cast({:goto_menu}, %{client: client} = state) do
-    {:game, %{state | recipient_actor: Actors.Login.start_link(client)}}
+    {:game, %{state | recipient_actor: Actors.Login.start_link(client, self())}}
   end
 
   # DEGUB that march everything
   def handle_cast({x, _}, state) do
-    IO.inspect("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    IO.puts("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -76,10 +88,12 @@ defmodule Actors.Bridge do
   # - - -
 
   @impl true
-  def init(initial_state) do
+  def init(%{client: client} = initial_state) do
     IO.puts("Actor.Bridge init" <> inspect(self()))
 
-    {:ok, initial_state}
+    {:ok, pid} = Actors.Login.start_link(client, self())
+
+    {:ok, %{initial_state | recipient_actor: pid}}
   end
 
   # *** Public api ***

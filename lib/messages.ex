@@ -1,4 +1,8 @@
 defmodule Messages do
+  @moduledoc """
+  Messages
+  """
+
   defp clear_char, do: "[2J"
   defp underline, do: "\u001b[0004m"
   defp nc, do: "\u001b[0;0m"
@@ -127,24 +131,6 @@ defmodule Messages do
         IO.ANSI.format([:cyan, me[:name]])
       else
         me[:name]
-      end
-
-    p1i =
-      case p1[:is_stopped] do
-        true -> "🚫"
-        false -> ""
-      end
-
-    p2i =
-      case p2[:is_stopped] do
-        true -> "🚫"
-        false -> ""
-      end
-
-    mei =
-      case me[:is_stopped] do
-        true -> "🚫"
-        false -> ""
       end
 
     # CARDS

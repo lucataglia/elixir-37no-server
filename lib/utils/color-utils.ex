@@ -1,24 +1,28 @@
 defmodule Utils.Colors do
+  @moduledoc """
+  Utils.Colors
+  """
+
   @underline "\u001b[4m"
   @stop_underline "\u001b[24m"
 
-  def withUnderline(str) do
+  def with_underline(str) do
     "#{@underline}#{str}#{@stop_underline}"
   end
 
-  def withYellow(str) do
+  def with_yellow(str) do
     IO.ANSI.format([:yellow, str])
   end
 
-  def withCyan(str) do
+  def with_cyan(str) do
     IO.ANSI.format([:cyan, str])
   end
 
-  def withGreen(str) do
+  def with_green(str) do
     "#{IO.ANSI.format([:green, str])}"
   end
 
-  def withMagenta(str) do
+  def with_magenta(str) do
     "#{IO.ANSI.format([:magenta, str])}"
   end
 end
