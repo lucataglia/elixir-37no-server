@@ -3,9 +3,11 @@ defmodule Actors.NewTableManager.Messages do
   Actors.TableManager.Messages
   """
 
-  def player_exit_the_game(name), do: "🚫 #{name} exit the game... \n"
+  def player_left_the_game(name), do: "#{name} exit the game 🚫\n"
 
-  def rejoin_success, do: "Welcome back 🍀"
+  def player_rejoined_the_game(name), do: "#{name} is back 💪 \n"
+
+  def rejoin_success, do: "Welcome back 💪"
 
   def observe_success, do: "Welcome to the table as observer 👀"
 

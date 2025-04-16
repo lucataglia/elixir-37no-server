@@ -70,7 +70,7 @@ defmodule Actors.TableManager do
 
     # Tells who is the new dealer
     Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
-      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_exit_the_game(name)})
+      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_left_the_game(name)})
     end)
 
     {:noreply, %{state | game_state: new_game_state}}

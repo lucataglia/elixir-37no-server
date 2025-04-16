@@ -9,8 +9,10 @@ defmodule Actors.NewTableManager do
 
   @choice :choice
   @observer_leave :observer_leave
+  @player_left_the_game :player_left_the_game
   @player_rejoin :player_rejoin
   @player_observe :player_observe
+  @replay :replay
 
   defp init_state(raw_players),
     do: %{
@@ -69,15 +71,15 @@ defmodule Actors.NewTableManager do
     GenServer.start_link(__MODULE__, init_state(raw_players), name: {:global, uuid})
   end
 
-  # STOP
-  def handle_cast({:player_stop, name}, %{game_state: game_state} = state) do
+  # LEFT THE GAME
+  def handle_cast({@player_left_the_game, name}, %{game_state: game_state} = state) do
     players = game_state[:players]
     new_player = %{players[name] | is_stopped: true}
     new_game_state = %{game_state | players: Map.put(players, name, new_player)}
 
     # Tells who is the new dealer
     Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
-      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_exit_the_game(name)})
+      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_left_the_game(name)})
     end)
 
     {:noreply, %{state | game_state: new_game_state}}
@@ -85,15 +87,19 @@ defmodule Actors.NewTableManager do
 
   # REJOIN
   @impl true
-  def handle_cast({@player_rejoin, name, pid}, %{game_state: game_state} = state) do
+  def handle_cast({@player_rejoin, name, player_pid}, %{game_state: game_state} = state) do
     dealer_index = game_state[:dealer_index]
     players = game_state[:players]
     is_dealer = players[:index] == dealer_index
 
-    new_players = %{players | name => %{players[name] | pid: pid}}
+    new_players = %{players | name => %{players[name] | pid: player_pid}}
     new_game_state = %{game_state | players: new_players}
 
-    GenServer.cast(pid, {:rejoin_success, new_game_state, is_dealer, Actors.NewTableManager.Messages.rejoin_success()})
+    GenServer.cast(player_pid, {:rejoin_success, self(), new_game_state, is_dealer, Actors.NewTableManager.Messages.rejoin_success()})
+
+    Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
+      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_rejoined_the_game(name)})
+    end)
 
     {:noreply, %{state | game_state: new_game_state}}
   end
@@ -337,16 +343,16 @@ defmodule Actors.NewTableManager do
 
   # END GAME
   @impl true
-  def handle_cast({:replay, name}, %{behavior: :end_game, there_is_a_looser: false} = state) do
-    handle_end_game({:replay, {name, false}}, state)
+  def handle_cast({@replay, name}, %{behavior: :end_game, there_is_a_looser: false} = state) do
+    handle_end_game({@replay, {name, false}}, state)
   end
 
   @impl true
-  def handle_cast({:replay, name}, %{behavior: :end_game, there_is_a_looser: true} = state) do
-    handle_end_game({:replay, {name, true}}, state)
+  def handle_cast({@replay, name}, %{behavior: :end_game, there_is_a_looser: true} = state) do
+    handle_end_game({@replay, {name, true}}, state)
   end
 
-  defp handle_end_game({:replay, {name, clear_leaderboard}}, %{want_to_replay: want_to_replay, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :end_game} = state) do
+  defp handle_end_game({@replay, {name, clear_leaderboard}}, %{want_to_replay: want_to_replay, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :end_game} = state) do
     IO.puts("#{name} want to replay")
 
     players = game_state[:players]
@@ -438,9 +444,9 @@ defmodule Actors.NewTableManager do
 
     Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
       if i == game_dealer_index do
-        GenServer.cast(p, {:dealer, new_game_state})
+        Actors.Player.start_game(p, self(), :dealer, new_game_state)
       else
-        GenServer.cast(p, {:better, new_game_state})
+        Actors.Player.start_game(p, self(), :better, new_game_state)
       end
     end)
 
@@ -460,15 +466,15 @@ defmodule Actors.NewTableManager do
 
   def replay(mode, name) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {:replay, name})
-      {:pid, pid} -> GenServer.cast(pid, {:replay, name})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@replay, name})
+      {:pid, pid} -> GenServer.cast(pid, {@replay, name})
     end
   end
 
-  def player_stop(mode, name) do
+  def player_left_the_game(mode, name) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {:player_stop, name})
-      {:pid, pid} -> GenServer.cast(pid, {:player_stop, name})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@player_left_the_game, name})
+      {:pid, pid} -> GenServer.cast(pid, {@player_left_the_game, name})
     end
   end
 

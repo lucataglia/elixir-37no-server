@@ -22,8 +22,7 @@ defmodule Actors.Login do
   # Handle :DOWN message when the parent dies
   @impl true
   def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
-    IO.puts("Parent process stopped with reason: #{inspect(reason)}")
-    # Perform cleanup or other actions before stopping
+    IO.puts("(Login) Parent process stopped with reason: #{inspect(reason)}")
 
     {:stop, :normal, state}
   end

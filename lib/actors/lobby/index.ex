@@ -6,9 +6,13 @@ defmodule Actors.Lobby do
 
   use GenServer
 
+  @behavior_lobby :behavior_lobby
+  @behavior_opted_in :behavior_opted_in
+  @forward_everything_to_player_actor :forward_everything_to_player_actor
+
   defp init_state(client, name, parent_pid) do
     %{
-      behavior: :lobby,
+      behavior: @behavior_lobby,
       client: client,
       name: name,
       parent_pid: parent_pid,
@@ -24,10 +28,9 @@ defmodule Actors.Lobby do
 
   # Handle :DOWN message when the parent dies
   @impl true
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, behavior: :opted_in} = state) do
-    IO.puts("Parent process stopped with reason: #{inspect(reason)}")
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, behavior: @behavior_opted_in} = state) do
+    IO.puts("#{Colors.with_magenta("[#{name}]")} (Lobby) Parent process stopped with reason: #{inspect(reason)}")
 
-    # Perform cleanup or other actions before stopping
     case Actors.GameManager.remove_player(name) do
       {:ok, _} ->
         {:stop, :normal, state}
@@ -43,6 +46,8 @@ defmodule Actors.Lobby do
 
     {:stop, :normal, state}
   end
+
+  # *** ENDHandle :DOWN message when the parent dies
 
   # PRINT MESSAGES
   @impl true
@@ -81,15 +86,11 @@ defmodule Actors.Lobby do
     {:noreply, state}
   end
 
-  # STOP
-  @impl true
-  def handle_cast({:stop}, %{behavior: :lobby} = state) do
-    {:stop, :normal, state}
-  end
+  # *** ENDPRINT MESSAGES
 
   # STATE - LOBBY
   @impl true
-  def handle_cast({:recv, data}, %{name: name, player_actor: player_actor, behavior: :lobby} = state) do
+  def handle_cast({:recv, data}, %{name: name, player_actor: player_actor, behavior: @behavior_lobby} = state) do
     case Actors.Lobby.Regex.check_game_opt_in(data) do
       {:ok, :opt_in} ->
         case Actors.GameManager.add_player(name, player_actor) do
@@ -99,10 +100,10 @@ defmodule Actors.Lobby do
 
           {:ok, :user_opted_in, msg} ->
             GenServer.cast(self(), {:success, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", msg})
-            {:noreply, %{state | behavior: :opted_in}}
+            {:noreply, %{state | behavior: @behavior_opted_in}}
 
           {:ok, :game_start} ->
-            {:noreply, %{state | behavior: :opted_in}}
+            {:noreply, %{state | behavior: @behavior_opted_in}}
         end
 
       {:ok, :list_my_open_tables} ->
@@ -170,7 +171,7 @@ defmodule Actors.Lobby do
 
   # STATE - REGISTERED
   @impl true
-  def handle_cast({:recv, data}, %{name: name, behavior: :opted_in} = state) do
+  def handle_cast({:recv, data}, %{name: name, behavior: @behavior_opted_in} = state) do
     case Actors.Lobby.Regex.check_game_opt_out(data) do
       {:ok, :opt_out} ->
         case Actors.GameManager.remove_player(name) do
@@ -181,7 +182,7 @@ defmodule Actors.Lobby do
 
           {:ok, msg} ->
             GenServer.cast(self(), {:success, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", msg})
-            {:noreply, %{state | behavior: :lobby}}
+            {:noreply, %{state | behavior: @behavior_lobby}}
         end
 
       {:error, :invalid_input} ->
@@ -191,13 +192,26 @@ defmodule Actors.Lobby do
   end
 
   @impl true
-  def handle_cast({:game_start}, %{behavior: :opted_in} = state) do
-    {:noreply, %{state | behavior: :forward_everything_to_player_actor}}
+  def handle_cast({:game_start}, state) do
+    case state[:behavior] do
+      # e.g. rejoin
+      @behavior_lobby ->
+        {:noreply, %{state | behavior: @forward_everything_to_player_actor}}
+
+      # e.g. game start
+      @behavior_opted_in ->
+        {:noreply, %{state | behavior: @forward_everything_to_player_actor}}
+
+      # this should never happen
+      _ ->
+        IO.puts(Colors.with_magenta("Error: got :game_start in #{state[:behavior]} behavior"))
+        {:noreply, state}
+    end
   end
 
   # STATE - GAME START
   @impl true
-  def handle_cast({:recv, _} = envelop, %{player_actor: player_actor, behavior: :forward_everything_to_player_actor} = state) do
+  def handle_cast({:recv, _} = envelop, %{player_actor: player_actor, behavior: @forward_everything_to_player_actor} = state) do
     GenServer.cast(player_actor, envelop)
     # GenServer.cast(player_actor, Tuple.insert_at(envelop, tuple_size(envelop), self()))
 

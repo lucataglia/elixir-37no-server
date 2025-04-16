@@ -41,7 +41,7 @@ defmodule SimpleServer do
 
                 send(self(), :stop)
                 :gen_tcp.close(client)
-                Actors.Bridge.stop(pid)
+                Actors.Bridge.exit(pid)
 
               no_white_spaces ->
                 Actors.Bridge.forward_data(pid, no_white_spaces)
@@ -49,7 +49,7 @@ defmodule SimpleServer do
             end).()
 
       {:error, :closed} ->
-        Actors.Bridge.stop(pid)
+        Actors.Bridge.client_disconected(pid)
         IO.puts("Client disconnected")
 
       {:error, reason} ->

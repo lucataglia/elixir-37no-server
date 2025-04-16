@@ -56,11 +56,6 @@ defmodule Actors.GameManager do
           uuid = UUID.uuid4()
           {:ok, table_manager_pid} = Actors.NewTableManager.start_link(uuid, new_players)
 
-          # Notify the players that the game is about to begin
-          Enum.each(Enum.to_list(new_players), fn {_, player_pid} ->
-            Actors.Player.start_game(player_pid, table_manager_pid)
-          end)
-
           # Update state
           datetime = DateTime.utc_now()
           formatted_datetime = Calendar.strftime(datetime, "%A, %B %d, %Y %I:%M %p")
@@ -97,10 +92,10 @@ defmodule Actors.GameManager do
 
         players_name =
           Enum.to_list(new_players)
-          |> Enum.map(fn {_, %{name: n}} -> n end)
+          |> Enum.map(fn {n, _} -> n end)
           |> Enum.join(" ")
 
-        Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
+        Enum.each(Enum.to_list(new_players), fn {_, p} ->
           GenServer.cast(p, {:success, Actors.Lobby.Messages.player_opt_out(players_name, name, map_size(new_players))})
         end)
 

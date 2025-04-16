@@ -23,7 +23,7 @@ defmodule Actors.Lobby.Messages do
     "#{Utils.Colors.with_green("OPTED IN")}" <> "\n" <> "Type #{Utils.Colors.with_underline("back")} to opt_out the game\n"
   end
 
-  def player_opt_out(players_name, count, name) do
+  def player_opt_out(players_name, name, count) do
     player_word = if count == 1, do: "player", else: "players"
 
     "#{name} opt_out 🚫\nPlayers: #{players_name}\nWaiting for other #{count} #{player_word}...\n"

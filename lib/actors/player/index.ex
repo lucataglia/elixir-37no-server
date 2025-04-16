@@ -2,8 +2,11 @@ defmodule Actors.Player do
   @moduledoc """
   Actors.Player
   """
+  alias Utils.Colors
 
   use GenServer
+
+  @start_game :start_game
 
   defp init_state(client, name, parent_pid) do
     %{
@@ -23,6 +26,25 @@ defmodule Actors.Player do
 
     GenServer.start_link(__MODULE__, init_state(client, name, parent_pid))
   end
+
+  # Handle :DOWN message when the parent dies
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, table_manager_pid: table_manager_pid} = state) do
+    case state[:behavior] do
+      :init ->
+        IO.puts("#{Colors.with_magenta("[#{name}]")} (Player) Parent process stopped with reason: #{inspect(reason)}")
+        {:stop, :normal, state}
+
+      _ ->
+        IO.puts("#{Colors.with_magenta("[#{name}]")} (Player) Parent process stopped with reason: #{inspect(reason)} - #{Colors.with_underline("Informing the TableManager")}")
+
+        Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, name)
+
+        {:stop, :normal, state}
+    end
+  end
+
+  # *** # Handle :DOWN message when the parent dies
 
   # PRINT MESSAGES
   @impl true
@@ -62,60 +84,38 @@ defmodule Actors.Player do
 
   # JOIN AS OBSERVER
   @impl true
-  def handle_cast({:join_as_observer, new_game_state, piggiback}, %{name: n} = state) do
+  def handle_cast({:join_as_observer, new_game_state, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
+    GenServer.cast(parent_pid, {:game_start})
     GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
+
     {:noreply, %{state | game_state: new_game_state, behavior: :observer}}
   end
 
   # REJOIN SUCCESS - as dealer
   @impl true
-  def handle_cast({:rejoin_success, new_game_state, true, piggiback}, %{name: n} = state) do
+  def handle_cast({:rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
+    GenServer.cast(parent_pid, {:game_start})
     GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
-    {:noreply, %{state | game_state: new_game_state, behavior: :better}}
+
+    {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :dealer}}
   end
 
   # REJOIN SUCCESS - as better
   @impl true
-  def handle_cast({:rejoin_success, new_game_state, false, piggiback}, %{name: n} = state) do
+  def handle_cast({:rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
+    GenServer.cast(parent_pid, {:game_start})
     GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
-    {:noreply, %{state | game_state: new_game_state, behavior: :dealer}}
+
+    {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :better}}
   end
 
-  # Handle :DOWN message when the parent dies
+  # STATE - INIT (behavior is :dealer or :better)
   @impl true
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, table_manager_pid: table_manager_pid, behavior: :opted_in} = state) do
-    IO.puts("Parent process stopped with reason: #{inspect(reason)}")
-
-    # Perform cleanup or other actions before stopping
-    Actors.NewTableManager.player_stop({:pid, table_manager_pid}, name)
-
-    {:stop, :normal, state}
-  end
-
-  # STATE - INIT
-  @impl true
-  def handle_cast({:start_game, table_manager_pid}, state) do
-    {:noreply, %{state | table_manager_pid: table_manager_pid}}
-  end
-
-  @impl true
-  def handle_cast({:dealer, game_state}, %{name: n, parent_pid: parent_pid, behavior: :init} = state) do
+  def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, parent_pid: parent_pid} = state) do
     GenServer.cast(parent_pid, {:game_start})
-
-    # Print the table with good luck
     GenServer.cast(self(), {:message, Messages.print_table(game_state, n, Actors.Player.Messages.good_luck())})
 
-    {:noreply, %{state | game_state: game_state, behavior: :dealer}}
-  end
-
-  @impl true
-  def handle_cast({:better, game_state}, %{name: n, parent_pid: parent_pid, behavior: :init} = state) do
-    GenServer.cast(parent_pid, {:game_start})
-
-    # Print the table with good luck
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n, Actors.Player.Messages.good_luck())})
-
-    {:noreply, %{state | game_state: game_state, behavior: :better}}
+    {:noreply, %{state | table_manager_pid: table_manager_pid, behavior: behavior, game_state: game_state}}
   end
 
   # STATE - DEALER
@@ -276,8 +276,8 @@ defmodule Actors.Player do
   end
 
   # *** Public api ***
-  def start_game(pid, table_manager_pid) do
-    GenServer.cast(pid, {:start_game, table_manager_pid})
+  def start_game(pid, table_manager_pid, behavior, init_game_state) do
+    GenServer.cast(pid, {@start_game, table_manager_pid, behavior, init_game_state})
   end
 
   def success_message(pid, msg) do
