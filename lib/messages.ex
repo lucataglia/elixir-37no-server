@@ -51,15 +51,6 @@ defmodule Messages do
 
   def ready_to_replay_invalid_input(), do: "Other players still need to confirm if they want to replay \n"
 
-  def player_exit_the_game(name), do: "🚫 #{name} exit the game... \n"
-
-  def wants_to_replay(names) do
-    case length(names) do
-      1 -> "#{IO.ANSI.format([:cyan, Enum.join(names, "")])} is ready to play again"
-      _ -> "#{IO.ANSI.format([:cyan, Enum.join(names, " and ")])} are ready to play again"
-    end
-  end
-
   def message(message),
     do: "#{message}\n"
 
@@ -337,7 +328,7 @@ defmodule Messages do
                               3. #{third_leaderboard}
 
 
-      
+
                               First: #{tfcp}                       #{info}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
                               #{v}                               #{dealer_name_bluee}                          #{v}

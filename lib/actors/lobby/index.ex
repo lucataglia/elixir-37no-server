@@ -2,6 +2,7 @@ defmodule Actors.Lobby do
   @moduledoc """
   Actors.Lobby
   """
+  alias Utils.Colors
 
   use GenServer
 
@@ -27,9 +28,13 @@ defmodule Actors.Lobby do
     IO.puts("Parent process stopped with reason: #{inspect(reason)}")
 
     # Perform cleanup or other actions before stopping
-    Actors.TableManager.remove_player(name)
+    case Actors.GameManager.remove_player(name) do
+      {:ok, _} ->
+        {:stop, :normal, state}
 
-    {:stop, :normal, state}
+      {:error} ->
+        {:stop, :normal, state}
+    end
   end
 
   @impl true
@@ -43,6 +48,12 @@ defmodule Actors.Lobby do
   @impl true
   def handle_cast({:message, msg}, %{client: client} = state) do
     :gen_tcp.send(client, Messages.message(msg))
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:message, head, msg}, %{client: client} = state) do
+    :gen_tcp.send(client, "#{head}#{Messages.message(msg)}")
     {:noreply, state}
   end
 
@@ -81,7 +92,7 @@ defmodule Actors.Lobby do
   def handle_cast({:recv, data}, %{name: name, player_actor: player_actor, behavior: :lobby} = state) do
     case Actors.Lobby.Regex.check_game_opt_in(data) do
       {:ok, :opt_in} ->
-        case Actors.TableManager.add_player(player_actor, name) do
+        case Actors.GameManager.add_player(name, player_actor) do
           {:error, :user_already_registered} ->
             GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", Actors.Lobby.Messages.user_already_opted_in(name)})
             {:noreply, state}
@@ -91,9 +102,65 @@ defmodule Actors.Lobby do
             {:noreply, %{state | behavior: :opted_in}}
 
           {:ok, :game_start} ->
-            GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n"})
             {:noreply, %{state | behavior: :opted_in}}
         end
+
+      {:ok, :list_my_open_tables} ->
+        case Actors.GameManager.list_open_tables(name) do
+          {:ok, :no_active_game} ->
+            GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", "You have zero game in progess"})
+            {:noreply, state}
+
+          {:ok, list} ->
+            msg = Enum.map(list, fn {game_uuid, game_desc} -> "#{Colors.with_underline("rejoin #{game_uuid}")} - #{game_desc}" end)
+            GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", msg})
+            {:noreply, state}
+        end
+
+      {:ok, :list_all_open_tables} ->
+        case Actors.GameManager.list_all_open_tables() do
+          {:ok, list} when list == [] ->
+            GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", "There are zero games in progess"})
+
+            {:noreply, state}
+
+          {:ok, list} ->
+            msg = Enum.map(list, fn {game_uuid, game_desc} -> "#{Colors.with_underline("observe #{game_uuid}")} - #{game_desc}" end)
+            GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", msg})
+            {:noreply, state}
+        end
+
+      {:ok, :rejoin, uuid} ->
+        case Actors.GameManager.rejoin(name, uuid, player_actor) do
+          {:ok, :table_manager_informed} ->
+            warn_msg = {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", "Please wait..."}
+            GenServer.cast(self(), warn_msg)
+
+            {:noreply, state}
+
+          {:error, :game_does_not_exist} ->
+            warn_msg = {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."}
+            GenServer.cast(self(), warn_msg)
+
+            {:noreply, state}
+        end
+
+      {:ok, :observe, uuid} ->
+        case Actors.GameManager.observe(name, uuid, player_actor) do
+          {:ok, :table_manager_informed} ->
+            warn_msg = {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", "Please wait..."}
+            GenServer.cast(self(), warn_msg)
+
+            {:noreply, state}
+
+          {:error, :game_does_not_exist} ->
+            warn_msg = {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."}
+            GenServer.cast(self(), warn_msg)
+
+            {:noreply, state}
+        end
+
+        {:noreply, state}
 
       {:error, :invalid_input} ->
         GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", Actors.Lobby.Messages.invalid_input_lobby(data)})
@@ -106,7 +173,7 @@ defmodule Actors.Lobby do
   def handle_cast({:recv, data}, %{name: name, behavior: :opted_in} = state) do
     case Actors.Lobby.Regex.check_game_opt_out(data) do
       {:ok, :opt_out} ->
-        case Actors.TableManager.remove_player(name) do
+        case Actors.GameManager.remove_player(name) do
           # TODO: write a meaningfull error
           {:error, :user_not_registered} ->
             GenServer.cast(self(), {:warning, "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", "Player #{name} cannot be removed from that game because he didn't do the opt-in"})

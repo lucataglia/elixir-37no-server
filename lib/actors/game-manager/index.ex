@@ -2,9 +2,13 @@ defmodule Actors.GameManager do
   @moduledoc """
   Actors.GameManager
   """
+
   @gamemanager :gamemanager
   @player_opt_in :player_opt_in
   @player_opt_out :player_opt_out
+  @list_open_tables :list_open_tables
+  @list_all_open_tables :list_all_open_tables
+  @observe :observe
   @rejoin :rejoin
 
   use GenServer
@@ -17,7 +21,7 @@ defmodule Actors.GameManager do
       # {uuid: {table_manager_pid, game_desc }}
       active_games: %{},
 
-      # {name: {uuid, game_desc }
+      # {name: {uuid, game_desc }}
       active_players: %{}
     }
 
@@ -36,45 +40,39 @@ defmodule Actors.GameManager do
         new_players = Map.put(players, name, pid)
 
         players_name =
-          Enum.to_list(players)
-          |> Enum.map(fn {_, %{name: n}} -> n end)
+          Enum.to_list(new_players)
+          |> Enum.map(fn {n, _} -> n end)
           |> Enum.join(", ")
 
         if count < 3 do
           msg = Messages.new_player_arrived(players_name, 3 - count)
 
-          Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
-            GenServer.cast(p, {:success, msg})
+          Enum.each(Enum.to_list(new_players), fn {_, player_pid} ->
+            Actors.Player.success_message(player_pid, msg)
           end)
 
           {:reply, {:ok, :user_opted_in, msg}, %{state | players: new_players}}
         else
-          # TODO
-          # 1. update active games
-          # 2. create TableManager.Actor through TableManager.start_link(uuid) and the start_link function of the TableManager must do: GenServer.start_link(__MODULE__, ..., name: {global: uuid})
-          # 3. clear the players Map so the GameManager can accept three new players
-          # 4. save in a new map name -> TableManager.uuid so a rejoin logic can be implemented
-
           uuid = UUID.uuid4()
-          {:ok, pid} = Actors.NewTableManager.start_link(UUID.uuid4(uuid, new_players))
+          {:ok, table_manager_pid} = Actors.NewTableManager.start_link(uuid, new_players)
 
           # Notify the players that the game is about to begin
-          Enum.each(Enum.to_list(new_players), fn {_, %{pid: p}} ->
-            GenServer.cast(p, {:start_game, pid})
+          Enum.each(Enum.to_list(new_players), fn {_, player_pid} ->
+            Actors.Player.start_game(player_pid, table_manager_pid)
           end)
 
           # Update state
           datetime = DateTime.utc_now()
           formatted_datetime = Calendar.strftime(datetime, "%A, %B %d, %Y %I:%M %p")
-          game_desc = "#{Utils.Colors.with_underline(formatted_datetime)}: #{players_name}"
+          game_desc = "#{formatted_datetime}: #{players_name}"
 
           new_active_players =
             Enum.to_list(new_players)
             |> Enum.map(fn {name, _} -> {name, [{uuid, game_desc}]} end)
             |> Enum.into(%{})
-            |> Map.merge(state[:active_players], fn _key, v1, v1 -> v1 ++ v2 end)
+            |> Map.merge(state[:active_players], fn _key, v1, v2 -> v1 ++ v2 end)
 
-          new_active_games = Map.put(state[:active_games], uuid, {pid, game_desc})
+          new_active_games = Map.put(state[:active_games], uuid, {table_manager_pid, game_desc})
 
           new_state = %{
             state
@@ -83,7 +81,7 @@ defmodule Actors.GameManager do
               active_players: new_active_players
           }
 
-          {:reply, {:ok, :game_start}, %{state | players: %{}}}
+          {:reply, {:ok, :game_start}, new_state}
         end
     end
   end
@@ -111,18 +109,54 @@ defmodule Actors.GameManager do
   end
 
   @impl true
-  def handle_call({@rejoin, name}, _from, state) do
-    # TODO: player type rejoin and the game manager returns all the games he is playing if any
-    # we can retrieve that info from state[:active_players]
-    {:reply, :ok, state}
+  def handle_call({@list_open_tables, name}, _from, %{active_players: active_players} = state) do
+    case active_players[name] do
+      # list is [{game_uuid, game_desc}, ...]
+      list when is_list(list) and list != [] ->
+        {:reply, {:ok, list}, state}
+
+      nil ->
+        {:reply, {:ok, :no_active_game}, state}
+    end
   end
 
   @impl true
-  def handle_call({@rejoin, name, uuid, player_pid}, _from, state) do
+  def handle_call({@list_all_open_tables}, _from, %{active_games: active_games} = state) do
+    list =
+      Enum.to_list(active_games)
+      |> Enum.map(fn {uuid, {_, game_desc}} -> {uuid, game_desc} end)
+
+    {:reply, {:ok, list}, state}
+  end
+
+  @impl true
+  def handle_call({@rejoin, name, uuid, player_pid}, _from, %{active_games: active_games} = state) do
+    case active_games[uuid] do
+      {_, _} ->
+        Actors.NewTableManager.player_rejoin({:uuid, uuid}, name, player_pid)
+
+        {:reply, {:ok, :table_manager_informed}, state}
+
+      nil ->
+        {:reply, {:error, :game_does_not_exist}, state}
+    end
+
     # TODO: with the uuid returned to the prev step, the user chose which game to rejoin.
     # witht the uuid we can retrieve the TableManager uuid and call him to ask him to
     # switch the old_player_pid with the new player_pid so the player can rejoin the game
-    {:reply, :ok, state}
+  end
+
+  @impl true
+  def handle_call({@observe, name, uuid, player_pid}, _from, %{active_games: active_games} = state) do
+    case active_games[uuid] do
+      {_, _} ->
+        Actors.NewTableManager.player_observe({:uuid, uuid}, name, player_pid)
+
+        {:reply, {:ok, :table_manager_informed}, state}
+
+      nil ->
+        {:reply, {:error, :game_does_not_exist}, state}
+    end
   end
 
   @impl true
@@ -131,11 +165,27 @@ defmodule Actors.GameManager do
   end
 
   # Public API
-  def add_player(name) do
-    GenServer.call(self(), {@player_opt_in, name})
+  def add_player(name, pid) do
+    GenServer.call(@gamemanager, {@player_opt_in, name, pid})
   end
 
   def remove_player(name) do
-    GenServer.cast(self(), {@player_opt_out, name})
+    GenServer.call(@gamemanager, {@player_opt_out, name})
+  end
+
+  def list_open_tables(name) do
+    GenServer.call(@gamemanager, {@list_open_tables, name})
+  end
+
+  def list_all_open_tables() do
+    GenServer.call(@gamemanager, {@list_all_open_tables})
+  end
+
+  def rejoin(name, uuid, player_pid) do
+    GenServer.call(@gamemanager, {@rejoin, name, uuid, player_pid})
+  end
+
+  def observe(name, uuid, player_pid) do
+    GenServer.call(@gamemanager, {@observe, name, uuid, player_pid})
   end
 end

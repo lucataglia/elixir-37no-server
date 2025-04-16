@@ -7,9 +7,14 @@ defmodule Actors.NewTableManager do
 
   use GenServer
 
+  @choice :choice
+  @observer_leave :observer_leave
+  @player_rejoin :player_rejoin
+  @player_observe :player_observe
+
   defp init_state(raw_players),
     do: %{
-      behavior: :opt_in,
+      behavior: :game,
       deck: Deck.shuffle(),
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
@@ -27,12 +32,13 @@ defmodule Actors.NewTableManager do
       #   dealer_index: [0..2]
       #   used_card_count: 0,
       #   leaderboard: []
+      #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", players: raw_players}
+      game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", players: raw_players, observers: %{}}
     }
 
-  defp end_game_init_state(there_is_a_looser, game_dealer_index, players),
+  defp end_game_init_state(there_is_a_looser, game_dealer_index, players, observers),
     do: %{
       behavior: :end_game,
       there_is_a_looser: there_is_a_looser,
@@ -53,9 +59,10 @@ defmodule Actors.NewTableManager do
       #   dealer_index: [0..2]
       #   used_card_count: 0,
       #   leaderboard: []
+      #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", players: players}
+      game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", players: players, observers: observers}
     }
 
   def start_link(uuid, raw_players) do
@@ -70,17 +77,59 @@ defmodule Actors.NewTableManager do
 
     # Tells who is the new dealer
     Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
-      GenServer.cast(p, {:game_state_update, new_game_state, Messages.player_exit_the_game(name)})
+      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_exit_the_game(name)})
     end)
 
     {:noreply, %{state | game_state: new_game_state}}
   end
 
+  # REJOIN
+  @impl true
+  def handle_cast({@player_rejoin, name, pid}, %{game_state: game_state} = state) do
+    dealer_index = game_state[:dealer_index]
+    players = game_state[:players]
+    is_dealer = players[:index] == dealer_index
+
+    new_players = %{players | name => %{players[name] | pid: pid}}
+    new_game_state = %{game_state | players: new_players}
+
+    GenServer.cast(pid, {:rejoin_success, new_game_state, is_dealer, Actors.NewTableManager.Messages.rejoin_success()})
+
+    {:noreply, %{state | game_state: new_game_state}}
+  end
+
+  # OBSERVE
+  @impl true
+  def handle_cast({@player_observe, name, pid}, %{game_state: game_state} = state) do
+    observers = game_state[:observers]
+    new_observers = Map.put(observers, name, pid)
+    new_game_state = %{game_state | observers: new_observers}
+
+    GenServer.cast(pid, {:join_as_observer, new_game_state, Actors.NewTableManager.Messages.observe_success()})
+
+    {:noreply, %{state | game_state: new_game_state}}
+  end
+
+  @impl true
+  def handle_call({@observer_leave, name}, _from, %{game_state: game_state} = state) do
+    observers = game_state[:observers]
+
+    if Map.has_key?(observers, name) do
+      new_observers = Map.delete(observers, name)
+      new_game_state = %{game_state | observers: new_observers}
+
+      {:reply, {:ok}, %{state | game_state: new_game_state}}
+    else
+      {:reply, {:error, Actors.NewTableManager.Messages.observe_leave_error(name)}}
+    end
+  end
+
   # GAME
   @impl true
-  def handle_cast({:choice, name, card}, %{current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
+  def handle_cast({@choice, name, card}, %{current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
+    observers = game_state[:observers]
     new_current_turn = [{name, card} | current_turn]
     new_used_card_count = used_card_count + 1
 
@@ -204,6 +253,11 @@ defmodule Actors.NewTableManager do
             |> Enum.to_list()
             |> Enum.each(fn {_, %{pid: p}} -> GenServer.cast(p, {:end_game, new_game_state_with_leaderboard}) end)
 
+            Enum.to_list(observers)
+            |> Enum.each(fn {_, pid} ->
+              GenServer.cast(pid, {:game_state_update, new_game_state})
+            end)
+
             case there_is_a_looser do
               true ->
                 new_game_dealer_index =
@@ -212,14 +266,14 @@ defmodule Actors.NewTableManager do
                     _ -> dealer_index
                   end
 
-                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard)
+                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
 
               false ->
                 new_game_dealer_index = rem(game_dealer_index + 1, 3)
-                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard)
+                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
@@ -230,9 +284,17 @@ defmodule Actors.NewTableManager do
             # Tells who is the new dealer
             Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
               cond do
-                new_game_state[:dealer_index] == i -> GenServer.cast(p, {:dealer, new_game_state})
-                true -> GenServer.cast(p, {:better, new_game_state})
+                new_game_state[:dealer_index] == i ->
+                  GenServer.cast(p, {:dealer, new_game_state})
+
+                true ->
+                  GenServer.cast(p, {:better, new_game_state})
               end
+            end)
+
+            Enum.to_list(observers)
+            |> Enum.each(fn {_, pid} ->
+              GenServer.cast(pid, {:game_state_update, new_game_state})
             end)
 
             # RETURN
@@ -288,6 +350,7 @@ defmodule Actors.NewTableManager do
     IO.puts("#{name} want to replay")
 
     players = game_state[:players]
+    observers = game_state[:observers]
     new_want_to_replay = [name | want_to_replay]
 
     case length(new_want_to_replay) do
@@ -325,11 +388,21 @@ defmodule Actors.NewTableManager do
           end
         end)
 
+        Enum.to_list(observers)
+        |> Enum.each(fn {_, pid} ->
+          GenServer.cast(pid, {:game_state_update, new_game_state})
+        end)
+
         {:noreply, %{state | game_state: new_game_state, behavior: :game}}
 
       _ ->
         Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-          GenServer.cast(p, {:message, Messages.wants_to_replay(new_want_to_replay)})
+          GenServer.cast(p, {:message, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay)})
+        end)
+
+        Enum.to_list(observers)
+        |> Enum.each(fn {_, pid} ->
+          GenServer.cast(pid, {:message, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay)})
         end)
 
         {:noreply, %{state | want_to_replay: new_want_to_replay}}
@@ -337,8 +410,8 @@ defmodule Actors.NewTableManager do
   end
 
   @impl true
-  def init(%{deck: deck, game_state: game_state} = initial_state) do
-    IO.puts("Table Manager init")
+  def init(%{deck: deck, game_dealer_index: game_dealer_index, game_state: game_state} = initial_state) do
+    IO.puts("Table Manager init " <> inspect(self()))
     players = game_state[:players]
 
     [p1, p2, p3] =
@@ -361,42 +434,62 @@ defmodule Actors.NewTableManager do
       end)
 
     new_players = %{p1[:name] => p1, p2[:name] => p2, p3[:name] => p3}
+    new_game_state = %{game_state | players: new_players}
 
     Enum.each(Enum.to_list(new_players), fn {_, %{pid: p, index: i}} ->
-      if i == dealer_index do
+      if i == game_dealer_index do
         GenServer.cast(p, {:dealer, new_game_state})
       else
         GenServer.cast(p, {:better, new_game_state})
       end
     end)
 
-    {:ok,
-     %{
-       initial_state
-       | game_state: %{initial_state[:game_state] | players: new_players}
-     }}
+    {:ok, %{initial_state | game_state: new_game_state}}
   end
-
-  # LOBBY
 
   # *** Public api ***
-  def add_player(uuid, pid, name) do
-    GenServer.call({:global, uuid}, {:new_player, pid, name})
+  def send_choice(mode, name, card) do
+    case mode do
+      {:uuid, uuid} ->
+        GenServer.cast({:global, uuid}, {@choice, name, card})
+
+      {:pid, pid} ->
+        GenServer.cast(pid, {@choice, name, card})
+    end
   end
 
-  def remove_player(uuid, name) do
-    GenServer.call({:global, uuid}, {:remove_player, name})
+  def replay(mode, name) do
+    case mode do
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {:replay, name})
+      {:pid, pid} -> GenServer.cast(pid, {:replay, name})
+    end
   end
 
-  def send_choice(uuid, name, card) do
-    GenServer.cast({:global, uuid}, {:choice, name, card})
+  def player_stop(mode, name) do
+    case mode do
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {:player_stop, name})
+      {:pid, pid} -> GenServer.cast(pid, {:player_stop, name})
+    end
   end
 
-  def replay(uuid, name) do
-    GenServer.cast({:global, uuid}, {:replay, name})
+  def player_rejoin(mode, name, player_pid) do
+    case mode do
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@player_rejoin, name, player_pid})
+      {:pid, pid} -> GenServer.cast(pid, {@player_rejoin, name, player_pid})
+    end
   end
 
-  def player_stop(uuid, name) do
-    GenServer.cast({:global, uuid}, {:player_stop, name})
+  def player_observe(mode, name, player_pid) do
+    case mode do
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@player_observe, name, player_pid})
+      {:pid, pid} -> GenServer.cast(pid, {@player_observe, name, player_pid})
+    end
+  end
+
+  def observer_leave(mode, name) do
+    case mode do
+      {:uuid, uuid} -> GenServer.call({:global, uuid}, {@observer_leave, name})
+      {:pid, pid} -> GenServer.call(pid, {@observer_leave, name})
+    end
   end
 end

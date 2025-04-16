@@ -51,7 +51,6 @@ defmodule Actors.Bridge do
   def handle_cast({:recv, _} = envelop, %{client: client, recipient_actor: recipient_actor, behavior: :login} = state) do
     case GenServer.call(recipient_actor, envelop) do
       {:ok, :goto_lobby, name} ->
-        IO.puts("GOTO lobby " <> inspect(self()))
         {:ok, pid} = Actors.Lobby.start_link(client, name, self())
 
         {:noreply, %{state | name: name, recipient_actor: pid, behavior: :logged}}

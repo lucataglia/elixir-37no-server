@@ -7,7 +7,7 @@ defmodule SimpleServer do
     {:ok, socket} =
       :gen_tcp.listen(port, [:binary, packet: :line, active: false, reuseaddr: true])
 
-    Actors.TableManager.start_link()
+    Actors.GameManager.start_link()
 
     # CREATE TABLES
     :ets.new(:users, [:set, :public, :named_table])

@@ -88,7 +88,7 @@ defmodule Actors.Login do
           [{^name, ^password}] ->
             IO.puts("Login successful for user #{name}.")
 
-            {:stop, :normal, {:ok, :goto_lobby}, state}
+            {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
           [{^name, _}] ->
             GenServer.cast(
@@ -130,7 +130,7 @@ defmodule Actors.Login do
         case :ets.lookup(:users, name) do
           # Username is available, insert it
           [] ->
-            # TODO: hashing the password before writing 
+            # TODO: hashing the password before writing
             :ets.insert(:users, {name, password})
 
             IO.puts("User #{name} signed up successfully.")
