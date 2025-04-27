@@ -421,7 +421,7 @@ defmodule Actors.NewTableManager do
     players = game_state[:players]
 
     [p1, p2, p3] =
-      Enum.shuffle(players)
+      Utils.TestAware.shuffle(players)
       |> Enum.to_list()
       |> Enum.with_index()
       |> Enum.map(fn {{name, pid}, index} ->
