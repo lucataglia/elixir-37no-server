@@ -16,11 +16,19 @@ defmodule Actors.Lobby.Messages do
   end
 
   def lobby do
-    "#{Utils.Colors.with_green("LOBBY")}" <> "\n" <> "Type #{Utils.Colors.with_underline("play")} to opt_in to a game\n"
+    Messages.print_summary_table() <>
+      "\n\n\n\n" <>
+      Messages.recap_sentence() <>
+      "\n\n\n\n" <>
+      "#{Utils.Colors.with_green("LOBBY")}" <> "\n" <> "Type #{Utils.Colors.with_underline("play")} to opt_in to a game\n"
   end
 
   def opted_in do
-    "#{Utils.Colors.with_green("OPTED IN")}" <> "\n" <> "Type #{Utils.Colors.with_underline("back")} to opt_out the game\n"
+    Messages.print_summary_table() <>
+      "\n\n\n\n" <>
+      Messages.recap_sentence() <>
+      "\n\n\n\n" <>
+      "#{Utils.Colors.with_green("OPTED IN")}" <> "\n" <> "Type #{Utils.Colors.with_underline("back")} to opt_out the game\n"
   end
 
   def player_opt_out(players_name, name, count) do

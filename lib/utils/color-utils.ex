@@ -14,6 +14,10 @@ defmodule Utils.Colors do
     IO.ANSI.format([:yellow, str])
   end
 
+  def with_yellow_and_underline(str) do
+    with_yellow(with_underline(str))
+  end
+
   def with_cyan(str) do
     IO.ANSI.format([:cyan, str])
   end

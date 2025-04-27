@@ -28,15 +28,6 @@ defmodule Messages do
     "\nPlayers: #{players_name}\nWaiting for other #{count} #{player_word}...\n"
   end
 
-  def name_too_short(), do: "Name must be at least 3 characters\n"
-  def name_too_long(), do: "Name must be less than 10 characters\n"
-  def name_contains_invalid_chars(), do: "Name must contains only letters or numbers\n"
-  def name_already_taken(name), do: "Name #{name} already taken ☹️ please chose another one\n"
-
-  def name_is_valid(name), do: "Greetings #{name} 🙂\n"
-
-  def wait_for_game_start(), do: "Wait for the game to start\n"
-
   def wait_your_turn(), do: "Wait your turn\n"
 
   def you_dont_have_that_card(card), do: "You don't have the #{card}\n"
@@ -59,6 +50,65 @@ defmodule Messages do
 
   def success(message),
     do: IO.ANSI.format([:light_green, "#{message}\n"])
+
+  def print_summary_table do
+    # Helper function to calculate visible length (without ANSI codes)
+    visible_length = fn string ->
+      string
+      # Strip ANSI color codes
+      |> String.replace(~r/\e\[[0-9;]*m/, "")
+      |> String.length()
+    end
+
+    header_aspect = Utils.Colors.with_green("Aspect")
+    header_details = Utils.Colors.with_green("Details")
+
+    rows = [
+      {header_aspect, header_details},
+      {"Players", "3"},
+      {"Deck", "39-card Italian regional deck"},
+      {"Card hierarchy", "3 > 2 > Ace > King > Queen > Jack > 7 > 6 > 5 > 4"},
+      {"Card values", "Ace = 1 pt, 2/3/face = 1/3 pt, others = 0"},
+      {"Max points per deal", "11"},
+      {"Game ends when", "Any player reaches 21+ points"},
+      {"Objective", "Have the LOWEST total score when game ends"},
+      {"Victory condition", "Player with least points when any player crosses 21"}
+    ]
+
+    # Calculate max widths using visible length (without ANSI codes)
+    {max_aspect, max_details} =
+      Enum.reduce(rows, {0, 0}, fn {aspect, details}, {max_a, max_d} ->
+        {
+          max(visible_length.(aspect), max_a),
+          max(visible_length.(details), max_d)
+        }
+      end)
+
+    separator = "|#{String.duplicate("-", max_aspect + 2)}|#{String.duplicate("-", max_details + 2)}|"
+
+    table_lines =
+      rows
+      |> Enum.map(fn {aspect, details} ->
+        # Pad using visible length but keep original strings with colors
+        aspect_padded = String.pad_trailing(aspect, max_aspect + (String.length(aspect) - visible_length.(aspect)))
+        details_padded = String.pad_trailing(details, max_details + (String.length(details) - visible_length.(details)))
+        "| #{aspect_padded} | #{details_padded} |"
+      end)
+      # Add separators before first row, between rows, and after last row
+      |> then(fn lines -> [separator] ++ Enum.intersperse(lines, separator) ++ [separator] end)
+
+    Enum.join(table_lines, "\n")
+  end
+
+  def recap_sentence do
+    goal = "In each deal, your goal is to score #{Utils.Colors.with_underline("as few points as possible")}."
+
+    warning =
+      "However, you must score #{Utils.Colors.with_underline("at least 1 point per deal")}.\n" <>
+        "Failing to do so results in a penalty of #{Utils.Colors.with_yellow_and_underline("11 points added to your total score")}."
+
+    [goal, "\n", warning, IO.ANSI.reset()] |> IO.iodata_to_binary()
+  end
 
   def print_table(game_state, name, piggyback \\ "") do
     players = game_state[:players]
@@ -314,19 +364,32 @@ defmodule Messages do
         false -> ""
       end
 
-    first_leaderboard = "#{first[:name]} #{first[:leaderboard] |> Enum.sum()} #{winner_icon}"
-    second_leaderboard = "#{second[:name]} #{second[:leaderboard] |> Enum.sum()}"
-    third_leaderboard = "#{third[:name]} #{third[:leaderboard] |> Enum.sum()}"
+    leaderboardxxxxxxxxxxx = Utils.String.ensure_min_length(Utils.Colors.with_underline("Leaderboard"), 31, :right)
+    first_leaderboardxx = Utils.String.ensure_min_length("#{first[:name]} #{first[:leaderboard] |> Enum.sum()} #{winner_icon}", 19, :right)
+    second_leaderboardx = Utils.String.ensure_min_length("#{second[:name]} #{second[:leaderboard] |> Enum.sum()}", 19, :right)
+    third_leaderboardxx = Utils.String.ensure_min_length("#{third[:name]} #{third[:leaderboard] |> Enum.sum()}", 19, :right)
+
+    legendxxxxxxxx = Utils.String.ensure_min_length(Utils.Colors.with_underline("Legend"), 22, :right)
+    heartsxxxxxxxx = Utils.String.ensure_min_length("Hearts 🔴️", 15, :right)
+    diamondsxxxxxx = Utils.String.ensure_min_length("Diamonds 🔵", 15, :right)
+    clubsxxxxxxxxx = Utils.String.ensure_min_length("Clubs 🟢", 15, :right)
+    spadesxxxxxxxx = Utils.String.ensure_min_length("Spades ⚫️", 15, :right)
+
+    examplexxxxxxx = Utils.String.ensure_min_length(Utils.Colors.with_underline("Example"), 27, :left)
+    exheartsxxxxxx = Utils.String.ensure_min_length("7h -> 7 🔴️", 14, :left)
+    exdiamondsxxxx = Utils.String.ensure_min_length("jd -> J 🔵", 14, :left)
+    exclubsxxxxxxx = Utils.String.ensure_min_length("ac -> A 🟢", 14, :left)
+    exspadesxxxxxx = Utils.String.ensure_min_length("3s -> 3 ⚫️", 14, :left)
 
     """
     #{clear_char()}
     #{title()}
 
-                              Leaderboard
-                              1. #{first_leaderboard}
-                              2. #{second_leaderboard}
-                              3. #{third_leaderboard}
-
+                              #{leaderboardxxxxxxxxxxx}           #{legendxxxxxxxx}               #{examplexxxxxxx}
+                              1. #{first_leaderboardxx}           #{heartsxxxxxxxx}               #{exheartsxxxxxx}
+                              2. #{second_leaderboardx}           #{diamondsxxxxxx}               #{exdiamondsxxxx}
+                              3. #{third_leaderboardxx}           #{clubsxxxxxxxxx}               #{exclubsxxxxxxx}
+                                                               #{spadesxxxxxxxx}               #{exspadesxxxxxx}
 
 
                               First: #{tfcp}                       #{info}

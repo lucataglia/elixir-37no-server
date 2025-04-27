@@ -28,12 +28,12 @@ The total points available per deal add up to **11 points**:
 ## Gameplay
 
 - The dealer shuffles and deals **thirteen cards face down** to each player.
-- The **firt player in the trick** (called “di mano”) can choose any card he want.
+- **Firt player in the trick** (called “di mano”) can choose any card he want.
 - Players must follow suit (play a card of the same suit as the first card played in the trick).
 - If a player has no cards of the suit led, they may play any card.
 - The player who plays the **highest card of the suit led** wins the trick and collects the cards.
 - After all cards are played, players declare their points, except the last player who took a trick.
-- The last player’s points are calculated by subtracting the sum of the other players’ points from 11.
+- Last player’s points are calculated by subtracting the sum of the other players’ points from 11.
 
 ---
 
@@ -47,4 +47,4 @@ The total points available per deal add up to **11 points**:
 | Card values           | Ace = 1 pt, 2/3/face = 1/3 pt, others = 0         |
 | Total points per deal | 11                                                |
 | Objective             | Lowest score wins                                 |
-|  |
+|                       |
