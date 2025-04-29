@@ -355,6 +355,10 @@ defmodule Messages do
         c -> String.pad_trailing(c, 9)
       end
 
+    p1_lastxxx = if p1[:last], do: String.pad_leading("#{Utils.Colors.with_yellow_bright(p1[:last][:pretty])}", 25), else: String.pad_leading("", 13)
+    p2_last = if p2[:last], do: Utils.Colors.with_yellow_bright(p2[:last][:pretty]), else: ""
+    me_last = if me[:last], do: Utils.Colors.with_yellow_bright(me[:last][:pretty]), else: ""
+
     # END GAME
     end_game_label =
       case used_card_count == Deck.card_count() do
@@ -497,6 +501,7 @@ defmodule Messages do
       end
 
     end_game_card_value_recap = "\n#{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
+    end_game_card_hierarchy_recap = "\n#{Utils.Colors.with_underline("Card hierarchy")}: 3 > 2 > Ace > King > Queen > Jack > 7 > 6 > 5 > 4"
 
     """
     #{clear_char()}
@@ -516,17 +521,17 @@ defmodule Messages do
                               #{v}                               #{dealer_name_blueexxxx}                      #{v}
                               #{v}                                                                             #{v}
                               #{v}                                                                             #{v}
-       #{p1_namexxxxxxxxxxx}  #{v}     #{p1_curr}                                               #{p2_curr}     #{v}  #{p2_name}
+       #{p1_namexxxxxxxxxxx}  #{v}            #{p1_curr}                                 #{p2_curr}            #{v}  #{p2_name}   #{p2_last}
        #{p1_cards_and_stack}  #{v}                                                                             #{v}  #{p2_cards}  #{p2_stack}
-                              #{v}                                                                             #{v}
-                              #{v}                                                                             #{v}
+               #{p1_lastxxx}  #{v}                                                                             #{v}
                               #{v}                                     #{me_curr}                              #{v}
+                              #{v}                                                                             #{v}
                               #{v}                                                                             #{v}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
 
                               #{my_cards}
 
-                                                                   #{me_name}
+                                                                   #{me_name}   #{me_last}
                                                                    #{me_cards}  #{me_stack}
 
 
@@ -537,7 +542,7 @@ defmodule Messages do
     #{p1_end_game}
     #{p2_end_game}
     #{end_game_card_value_recap}
-
+    #{end_game_card_hierarchy_recap}
 
     #{piggyback}
     """

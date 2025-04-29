@@ -37,7 +37,7 @@ defmodule Actors.NewTableManager do
       #   turn_winner: ""
       #   there_is_a_looser: ""
       #   observers: %{name => pid}
-      #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, stack, is_looser, is_stopped}}
+      #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, last, stack, is_looser, is_stopped}}
       # }
       game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
     }
@@ -65,7 +65,7 @@ defmodule Actors.NewTableManager do
       #   turn_winner: ""
       #   there_is_a_looser: ""
       #   observers: %{name => pid}
-      #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, stack, is_looser, is_stopped}}
+      #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, last, stack, is_looser, is_stopped}}
       # }
       game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: there_is_a_looser, players: players, observers: observers}
     }
@@ -166,7 +166,8 @@ defmodule Actors.NewTableManager do
 
     cards = game_state[:players][name][:cards]
 
-    update_used_card = Map.put(game_state[:players][name][:cards][String.to_atom(card[:key])], :used, true)
+    curr_card = game_state[:players][name][:cards][String.to_atom(card[:key])]
+    update_used_card = Map.put(curr_card, :used, true)
     new_cards = Map.put(cards, String.to_atom(card[:key]), update_used_card)
 
     cond do
@@ -191,11 +192,13 @@ defmodule Actors.NewTableManager do
               |> Map.put(:cards, new_cards)
               |> Map.put(:stack, winner_new_stack)
               |> Map.put(:current, nil)
+              |> Map.put(:last, curr_card)
 
             winner_name != name ->
               game_state[:players][winner_name]
               |> Map.put(:stack, winner_new_stack)
               |> Map.put(:current, nil)
+              |> Map.put(:last, game_state[:players][winner_name][:current])
           end
 
         # Update other players
@@ -208,14 +211,14 @@ defmodule Actors.NewTableManager do
         {{name_other1, other_player1}, {name_other2, other_player2}} =
           case other_players do
             [{^name, o1}, {name_o2, o2}] ->
-              new_o1 = o1 |> Map.put(:current, nil) |> Map.put(:cards, new_cards)
-              new_o2 = o2 |> Map.put(:current, nil)
+              new_o1 = o1 |> Map.put(:current, nil) |> Map.put(:cards, new_cards) |> Map.put(:last, curr_card)
+              new_o2 = o2 |> Map.put(:current, nil) |> Map.put(:last, o2[:current])
 
               {{name, new_o1}, {name_o2, new_o2}}
 
             [{name_o1, o1}, {name_o2, o2}] ->
-              new_o1 = o1 |> Map.put(:current, nil)
-              new_o2 = o2 |> Map.put(:current, nil)
+              new_o1 = o1 |> Map.put(:current, nil) |> Map.put(:last, o1[:current])
+              new_o2 = o2 |> Map.put(:current, nil) |> Map.put(:last, curr_card)
 
               {{name_o1, new_o1}, {name_o2, new_o2}}
           end
