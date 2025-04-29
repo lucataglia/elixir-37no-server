@@ -70,6 +70,9 @@ defmodule Deck do
 
     if card do
       cond do
+        card[:used] == true ->
+          {:error, :card_already_used}
+
         turn_first_card[:suit] == nil ->
           # First card of the turn
           :ok
@@ -99,11 +102,17 @@ defmodule Deck do
     end
   end
 
-  def shuffle,
-    do:
-      factory()
-      |> Map.drop([":4s"])
-      |> Enum.to_list()
-      |> Enum.shuffle()
-      |> Enum.chunk_every(chunk_size())
+  def shuffle_and_chunk_deck do
+    case System.argv() do
+      [] ->
+        factory()
+        |> Map.drop([":4s"])
+        |> Enum.to_list()
+        |> Enum.shuffle()
+        |> Enum.chunk_every(chunk_size())
+
+      _ ->
+        Utils.TestAware.chunked_deck()
+    end
+  end
 end

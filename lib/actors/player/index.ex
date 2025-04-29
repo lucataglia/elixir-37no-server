@@ -6,6 +6,16 @@ defmodule Actors.Player do
 
   use GenServer
 
+  @better :better
+  @dealer :dealer
+  @end_game :end_game
+  @game_state_update :game_state_update
+  @msg_info :message
+  @msg_success :sucess
+  @msg_warning :warning
+  @observer :observer
+  @recv :recv
+  @rejoin_success :rejoin_success
   @start_game :start_game
 
   defp init_state(client, name, parent_pid) do
@@ -48,19 +58,19 @@ defmodule Actors.Player do
 
   # PRINT MESSAGES
   @impl true
-  def handle_cast({:message, msg}, %{client: client} = state) do
+  def handle_cast({@msg_info, msg}, %{client: client} = state) do
     :gen_tcp.send(client, Messages.message(msg))
     {:noreply, state}
   end
 
   @impl true
-  def handle_cast({:warning, msg}, %{client: client} = state) do
+  def handle_cast({@msg_warning, msg}, %{client: client} = state) do
     :gen_tcp.send(client, Messages.warning(msg))
     {:noreply, state}
   end
 
   @impl true
-  def handle_cast({:success, msg}, %{client: client} = state) do
+  def handle_cast({@msg_success, msg}, %{client: client} = state) do
     :gen_tcp.send(client, Messages.success(msg))
     {:noreply, state}
   end
@@ -69,14 +79,16 @@ defmodule Actors.Player do
 
   # GAME STATE UPDATE (e.g. some player exit the game)
   @impl true
-  def handle_cast({:game_state_update, new_game_state, piggiback}, %{name: n} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
+  def handle_cast({@game_state_update, new_game_state, piggiback}, %{name: n} = state) do
+    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
+
     {:noreply, %{state | game_state: new_game_state}}
   end
 
   @impl true
-  def handle_cast({:game_state_update, new_game_state}, %{name: n} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n)})
+  def handle_cast({@game_state_update, new_game_state}, %{name: n} = state) do
+    info_message(self(), Messages.print_table(new_game_state, n))
+
     {:noreply, %{state | game_state: new_game_state}}
   end
 
@@ -84,27 +96,30 @@ defmodule Actors.Player do
 
   # JOIN AS OBSERVER
   @impl true
-  def handle_cast({:join_as_observer, new_game_state, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
+  def handle_cast({@observer, new_game_state, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
     GenServer.cast(parent_pid, {:game_start})
-    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
+
+    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
     {:noreply, %{state | game_state: new_game_state, behavior: :observer}}
   end
 
   # REJOIN SUCCESS - as dealer
   @impl true
-  def handle_cast({:rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
+  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
     GenServer.cast(parent_pid, {:game_start})
-    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
+
+    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
     {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :dealer}}
   end
 
   # REJOIN SUCCESS - as better
   @impl true
-  def handle_cast({:rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
+  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
     GenServer.cast(parent_pid, {:game_start})
-    GenServer.cast(self(), {:message, Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback))})
+
+    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
     {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :better}}
   end
@@ -113,7 +128,8 @@ defmodule Actors.Player do
   @impl true
   def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, parent_pid: parent_pid} = state) do
     GenServer.cast(parent_pid, {:game_start})
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n, Actors.Player.Messages.good_luck())})
+
+    info_message(self(), Messages.print_table(game_state, n, Actors.Player.Messages.good_luck()))
 
     {:noreply, %{state | table_manager_pid: table_manager_pid, behavior: behavior, game_state: game_state}}
   end
@@ -121,13 +137,13 @@ defmodule Actors.Player do
   # STATE - DEALER
   @impl true
   def handle_cast(
-        {:recv, data},
+        {@recv, data},
         %{game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
       ) do
     case Utils.Regex.check_is_valid_card_key(data) do
       {:error, :invalid_input} ->
         piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-        GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+        info_message(self(), Messages.print_table(game_state, name, piggyback))
 
         {:noreply, state}
 
@@ -148,19 +164,23 @@ defmodule Actors.Player do
 
               {:error, :wrong_suit} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-                GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+                info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+              {:error, :card_already_used} ->
+                piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
+                info_message(self(), Messages.print_table(game_state, name, piggyback))
 
               {:error, :invalid_input} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-                GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+                info_message(self(), Messages.print_table(game_state, name, piggyback))
             end
           else
             piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
-            GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+            info_message(self(), Messages.print_table(game_state, name, piggyback))
           end
         else
           piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-          GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+          info_message(self(), Messages.print_table(game_state, name, piggyback))
         end
 
         {:noreply, state}
@@ -168,89 +188,103 @@ defmodule Actors.Player do
   end
 
   @impl true
-  def handle_cast({:dealer, game_state}, %{name: n, behavior: :dealer} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({@dealer, game_state}, %{name: n, behavior: :dealer} = state) do
+    info_message(self(), Messages.print_table(game_state, n))
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
-  def handle_cast({:better, game_state}, %{name: n, behavior: :dealer} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({@better, game_state}, %{name: n, behavior: :dealer} = state) do
+    info_message(self(), Messages.print_table(game_state, n))
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
   @impl true
-  def handle_cast({:end_game, game_state}, %{name: name, behavior: :dealer} = state) do
-    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+  def handle_cast({@end_game, game_state}, %{name: name, behavior: :dealer} = state) do
+    IO.puts("game_state[:there_is_a_looser]: " <> inspect(game_state[:there_is_a_looser]))
+
+    piggyback =
+      if game_state[:there_is_a_looser] do
+        "#{IO.ANSI.format([:magenta, :bright, Messages.game_ends_message()])}#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
+      else
+        IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
+      end
+
+    info_message(self(), Messages.print_table(game_state, name, piggyback))
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
   end
 
   # STATE - BETTER
   @impl true
-  def handle_cast({:recv, _}, %{behavior: :better} = state) do
-    GenServer.cast(self(), {:message, Messages.wait_your_turn()})
+  def handle_cast({@recv, _}, %{behavior: :better} = state) do
+    warning_message(self(), Messages.wait_your_turn())
 
     {:noreply, state}
   end
 
   @impl true
-  def handle_cast({:dealer, game_state}, %{name: n, behavior: :better} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({@dealer, game_state}, %{name: n, behavior: :better} = state) do
+    info_message(self(), Messages.print_table(game_state, n))
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
-  def handle_cast({:better, game_state}, %{name: n, behavior: :better} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({@better, game_state}, %{name: n, behavior: :better} = state) do
+    info_message(self(), Messages.print_table(game_state, n))
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
   @impl true
-  def handle_cast({:end_game, game_state}, %{name: name, behavior: :better} = state) do
-    piggyback = IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, name, piggyback)})
+  def handle_cast({@end_game, game_state}, %{name: name, behavior: :better} = state) do
+    piggyback =
+      if game_state[:there_is_a_looser] do
+        "#{IO.ANSI.format([:magenta, :bright, Messages.game_ends_message()])}#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
+      else
+        IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
+      end
+
+    info_message(self(), Messages.print_table(game_state, name, piggyback))
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
   end
 
   # STATE - END GAME
   @impl true
-  def handle_cast({:recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
+  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
     case Utils.Regex.check_end_game_input(data) do
       {:replay} ->
         Actors.NewTableManager.replay({:pid, table_manager_pid}, name)
         {:noreply, %{state | behavior: :ready_to_replay}}
 
       {:error, :invalid_input} ->
-        GenServer.cast(self(), {:warning, Messages.end_game_invalid_input()})
+        warning_message(self(), Messages.end_game_invalid_input())
         {:noreply, state}
     end
   end
 
   # STATE - READY TO REPLY
   @impl true
-  def handle_cast({:recv, _}, %{behavior: :ready_to_replay} = state) do
-    GenServer.cast(self(), {:warning, Messages.ready_to_replay_invalid_input()})
+  def handle_cast({@recv, _}, %{behavior: :ready_to_replay} = state) do
+    warning_message(self(), Messages.ready_to_replay_invalid_input())
 
     {:noreply, state}
   end
 
   @impl true
-  def handle_cast({:dealer, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({@dealer, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
+    info_message(self(), Messages.print_table(game_state, n))
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
-  def handle_cast({:better, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
-    GenServer.cast(self(), {:message, Messages.print_table(game_state, n)})
+  def handle_cast({@better, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
+    info_message(self(), Messages.print_table(game_state, n))
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
@@ -281,14 +315,74 @@ defmodule Actors.Player do
   end
 
   def success_message(pid, msg) do
-    GenServer.cast(pid, {:success, msg})
+    GenServer.cast(pid, {@msg_success, msg})
+  end
+
+  def info_message(pid, msg) do
+    GenServer.cast(pid, {@msg_info, msg})
+  end
+
+  def warning_message(pid, msg) do
+    GenServer.cast(pid, {@msg_warning, msg})
   end
 
   def forward_data(pid, data) do
     cond do
-      data == "" -> GenServer.cast(pid, {:warning, "Invalid input"})
-      data != "" -> GenServer.cast(pid, {:recv, data})
+      data == "" -> warning_message(pid, "Invalid input")
+      data != "" -> GenServer.cast(pid, {@recv, data})
     end
+  end
+
+  def game_state_update(pid, args, piggiback \\ nil) do
+    %{
+      new_game_state: new_game_state
+    } = args
+
+    GenServer.cast(pid, {@game_state_update, new_game_state, piggiback})
+  end
+
+  def join_as_observer(pid, args) do
+    %{
+      new_game_state: new_game_state,
+      piggiback: piggiback
+    } = args
+
+    GenServer.cast(pid, {@observer, new_game_state, piggiback})
+  end
+
+  def rejoin_success(pid, args) do
+    %{
+      table_manager_pid: table_manager_pid,
+      new_game_state: new_game_state,
+      is_dealer: is_dealer,
+      piggiback: piggiback
+    } = args
+
+    GenServer.cast(pid, {@rejoin_success, table_manager_pid, new_game_state, is_dealer, piggiback})
+  end
+
+  def you_are_the_dealer(pid, args) do
+    %{
+      new_game_state: new_game_state
+    } = args
+
+    GenServer.cast(pid, {@dealer, new_game_state})
+  end
+
+  def you_are_the_better(pid, args) do
+    %{
+      new_game_state: new_game_state
+    } = args
+
+    GenServer.cast(pid, {@better, new_game_state})
+  end
+
+  def end_game(pid, args) do
+    %{
+      new_game_state: new_game_state
+    } = args
+
+    GenServer.cast(pid, {@end_game, new_game_state})
   end
 
   def stop(pid) do

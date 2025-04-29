@@ -14,11 +14,18 @@ defmodule MyApp.SocketTest do
     :ok
   end
 
+  # TODO:
+  # We need to change the `players` and `deck` data structures from maps to keyword lists.
+  # This is because keyword lists preserve the order of elements and allow duplicate keys,
+  # which is important for maintaining the correct sequence and behavior in our game logic.
+  # Unlike maps, keyword lists guarantee consistent iteration order, making them better suited
+  # for scenarios where order matters (e.g., player turns, card order in the deck).
+  #
+  # Please update all relevant code to handle keyword lists accordingly.
   test "three clients connect and send commands in sequence with active true" do
-    # Client 1: Send 'b'
     # {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, active: false])
+    {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, active: false])
 
     pid = spawn_link(fn -> loop(sock1) end)
@@ -33,18 +40,247 @@ defmodule MyApp.SocketTest do
     Process.sleep(100)
 
     create_user(sock1, "Jeff")
-    create_user(sock2, "Joe")
-    create_user(sock3, "TheFe")
+    create_user(sock2, "Joebastian")
+    create_user(sock3, "TheFendent")
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
-    play(sock1)
-    play(sock3)
-    play(sock2)
+    opt_in(sock1)
+    opt_in(sock3)
+    opt_in(sock2)
 
     # Optionally wait for processing (if asynchronous)
+    Process.sleep(100)
+
+    play_card(sock1, "4h")
+    play_card(sock2, "5h")
+    play_card(sock3, "7h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    play_card(sock2, "5h")
+    play_card(sock3, "7h")
+    play_card(sock1, "4h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    play_card(sock3, "7h")
+    play_card(sock1, "4h")
+    play_card(sock2, "5h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    play_card(sock1, "4h")
+    play_card(sock2, "5h")
+    play_card(sock3, "7h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    # replay(sock1)
+    # replay(sock2)
+    # replay(sock3)
+    #
+    # exit_fn(sock2)
+    # Optionally wait for processing (if asynchronous)
     Process.sleep(2000)
+
     # Add assertions here based on expected server responses
     # Example: assert_response(sock1, "Welcome message")
 
@@ -77,10 +313,67 @@ defmodule MyApp.SocketTest do
 
   defp login_action(socket), do: TCP.send(socket, "b\n")
   defp create_user(socket, name), do: TCP.send(socket, "#{name} 000000\n")
-  defp play(socket), do: TCP.send(socket, "play\n")
+  defp opt_in(socket), do: TCP.send(socket, "play\n")
+
+  defp play_card(socket, card) do
+    TCP.send(socket, "#{card}\n")
+    Process.sleep(15)
+  end
+
+  defp replay(socket) do
+    TCP.send(socket, "replay\n")
+    Process.sleep(100)
+  end
+
+  defp exit_fn(socket) do
+    TCP.send(socket, "exit\n")
+    Process.sleep(100)
+  end
 
   defp assert_response(socket, expected) do
     {:ok, data} = TCP.recv(socket, 0, 1000)
     assert data =~ expected
   end
 end
+
+# pretty: "4 🔴️", --
+# pretty: "6 🔴️", --
+# pretty: "Q 🔴️", --
+# pretty: "K 🔴️", --
+# pretty: "2 🔴️", --
+# pretty: "3 🔴️", --
+# pretty: "4 🔵", --
+# pretty: "6 🔵", --
+# pretty: "J 🔵", --
+# pretty: "A 🟢", --
+# pretty: "6 ⚫️", --
+# pretty: "7 ⚫️", --
+# pretty: "3 ⚫️", --
+#
+# pretty: "5 🔴️", --
+# pretty: "J 🔴️", --
+# pretty: "5 🔵", --
+# pretty: "7 🔵", --
+# pretty: "A 🔵", --
+# pretty: "4 🟢", --
+# pretty: "6 🟢", --
+# pretty: "7 🟢", --
+# pretty: "5 ⚫️", --
+# pretty: "J ⚫️", --
+# pretty: "Q ⚫️", --
+# pretty: "K ⚫️", --
+# pretty: "2 ⚫️", --
+#
+# pretty: "7 🔴️", --
+# pretty: "A 🔴️", --
+# pretty: "Q 🔵", --
+# pretty: "K 🔵", --
+# pretty: "2 🔵", --
+# pretty: "3 🔵", --
+# pretty: "5 🟢", --
+# pretty: "J 🟢", --
+# pretty: "Q 🟢", --
+# pretty: "K 🟢", --
+# pretty: "2 🟢", --
+# pretty: "3 🟢", --
+# pretty: "A ⚫️", --

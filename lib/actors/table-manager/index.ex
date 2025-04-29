@@ -17,7 +17,7 @@ defmodule Actors.NewTableManager do
   defp init_state(raw_players),
     do: %{
       behavior: :game,
-      deck: Deck.shuffle(),
+      deck: Deck.shuffle_and_chunk_deck(),
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
       # }
@@ -33,18 +33,19 @@ defmodule Actors.NewTableManager do
       #   turn_first_card: %{label, suit, pretty, ranking, point},
       #   dealer_index: [0..2]
       #   used_card_count: 0,
-      #   leaderboard: []
+      #   info: ""
+      #   turn_winner: ""
+      #   there_is_a_looser: ""
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", players: raw_players, observers: %{}}
+      game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
     }
 
   defp end_game_init_state(there_is_a_looser, game_dealer_index, players, observers),
     do: %{
       behavior: :end_game,
-      there_is_a_looser: there_is_a_looser,
-      deck: Deck.shuffle(),
+      deck: Deck.shuffle_and_chunk_deck(),
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
       # }
@@ -60,11 +61,13 @@ defmodule Actors.NewTableManager do
       #   turn_first_card: %{label, suit, pretty, ranking, point},
       #   dealer_index: [0..2]
       #   used_card_count: 0,
-      #   leaderboard: []
+      #   info: ""
+      #   turn_winner: ""
+      #   there_is_a_looser: ""
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", players: players, observers: observers}
+      game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: there_is_a_looser, players: players, observers: observers}
     }
 
   def start_link(uuid, raw_players) do
@@ -79,7 +82,11 @@ defmodule Actors.NewTableManager do
 
     # Tells who is the new dealer
     Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
-      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_left_the_game(name)})
+      Actors.Player.game_state_update(
+        p,
+        %{new_game_state: new_game_state},
+        Actors.NewTableManager.Messages.player_left_the_game(name)
+      )
     end)
 
     {:noreply, %{state | game_state: new_game_state}}
@@ -95,10 +102,22 @@ defmodule Actors.NewTableManager do
     new_players = %{players | name => %{players[name] | pid: player_pid}}
     new_game_state = %{game_state | players: new_players}
 
-    GenServer.cast(player_pid, {:rejoin_success, self(), new_game_state, is_dealer, Actors.NewTableManager.Messages.rejoin_success()})
+    Actors.Player.rejoin_success(
+      player_pid,
+      %{
+        table_manager_pid: self(),
+        new_game_state: new_game_state,
+        is_dealer: is_dealer,
+        piggiback: Actors.NewTableManager.Messages.rejoin_success()
+      }
+    )
 
     Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-      GenServer.cast(p, {:game_state_update, new_game_state, Actors.NewTableManager.Messages.player_rejoined_the_game(name)})
+      Actors.Player.game_state_update(
+        p,
+        %{new_game_state: new_game_state},
+        Actors.NewTableManager.Messages.player_rejoined_the_game(name)
+      )
     end)
 
     {:noreply, %{state | game_state: new_game_state}}
@@ -111,7 +130,13 @@ defmodule Actors.NewTableManager do
     new_observers = Map.put(observers, name, pid)
     new_game_state = %{game_state | observers: new_observers}
 
-    GenServer.cast(pid, {:join_as_observer, new_game_state, Actors.NewTableManager.Messages.observe_success()})
+    Actors.Player.join_as_observer(
+      pid,
+      %{
+        new_game_state: new_game_state,
+        piggiback: Actors.NewTableManager.Messages.observe_success()
+      }
+    )
 
     {:noreply, %{state | game_state: new_game_state}}
   end
@@ -206,7 +231,7 @@ defmodule Actors.NewTableManager do
           game_state
           | turn_first_card: nil,
             dealer_index: winner_index,
-            info: "#{IO.ANSI.format([:light_green, winner_name])}: #{pretties}",
+            info: "#{IO.ANSI.format([:yellow, :bright, winner_name])}: #{pretties}",
             turn_winner: winner_name,
             used_card_count: new_used_card_count,
             players: new_players
@@ -252,16 +277,19 @@ defmodule Actors.NewTableManager do
               end)
               |> Enum.reduce({%{}, false}, fn {n, p, is_looser}, {acc_p, acc_is_looser} -> {Map.put(acc_p, n, p), is_looser || acc_is_looser} end)
 
-            new_game_state_with_leaderboard = %{new_game_state | dealer_index: nil, players: new_players_with_leaderboard}
+            new_game_state_with_leaderboard = %{new_game_state | there_is_a_looser: there_is_a_looser, dealer_index: nil, players: new_players_with_leaderboard}
 
             # Tells :end_game to the players
             new_players_with_leaderboard
             |> Enum.to_list()
-            |> Enum.each(fn {_, %{pid: p}} -> GenServer.cast(p, {:end_game, new_game_state_with_leaderboard}) end)
+            |> Enum.each(fn {_, %{pid: p}} -> Actors.Player.end_game(p, %{new_game_state: new_game_state_with_leaderboard}) end)
 
             Enum.to_list(observers)
             |> Enum.each(fn {_, pid} ->
-              GenServer.cast(pid, {:game_state_update, new_game_state})
+              Actors.Player.game_state_update(
+                pid,
+                %{new_game_state: new_game_state}
+              )
             end)
 
             case there_is_a_looser do
@@ -291,16 +319,19 @@ defmodule Actors.NewTableManager do
             Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
               cond do
                 new_game_state[:dealer_index] == i ->
-                  GenServer.cast(p, {:dealer, new_game_state})
+                  Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
 
                 true ->
-                  GenServer.cast(p, {:better, new_game_state})
+                  Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
               end
             end)
 
             Enum.to_list(observers)
             |> Enum.each(fn {_, pid} ->
-              GenServer.cast(pid, {:game_state_update, new_game_state})
+              Actors.Player.game_state_update(
+                pid,
+                %{new_game_state: new_game_state}
+              )
             end)
 
             # RETURN
@@ -329,10 +360,10 @@ defmodule Actors.NewTableManager do
         Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
           cond do
             new_game_state[:dealer_index] == i ->
-              GenServer.cast(p, {:dealer, new_game_state})
+              Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
 
             true ->
-              GenServer.cast(p, {:better, new_game_state})
+              Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
           end
         end)
 
@@ -343,12 +374,12 @@ defmodule Actors.NewTableManager do
 
   # END GAME
   @impl true
-  def handle_cast({@replay, name}, %{behavior: :end_game, there_is_a_looser: false} = state) do
+  def handle_cast({@replay, name}, %{behavior: :end_game, game_state: %{there_is_a_looser: false}} = state) do
     handle_end_game({@replay, {name, false}}, state)
   end
 
   @impl true
-  def handle_cast({@replay, name}, %{behavior: :end_game, there_is_a_looser: true} = state) do
+  def handle_cast({@replay, name}, %{behavior: :end_game, game_state: %{there_is_a_looser: true}} = state) do
     handle_end_game({@replay, {name, true}}, state)
   end
 
@@ -378,7 +409,7 @@ defmodule Actors.NewTableManager do
                     false -> p[:leaderboard]
                   end,
                 is_looser: false,
-                cards: Map.new(Enum.at(deck, p[:index] - 1))
+                cards: Map.new(Enum.at(deck, p[:index]))
             }
 
             Map.put(acc, n, new_player)
@@ -389,26 +420,29 @@ defmodule Actors.NewTableManager do
         # Inform who is the DEALER and who is the BETTER
         Enum.each(Enum.to_list(new_init_players), fn {_, %{pid: p, index: i}} ->
           cond do
-            i == game_dealer_index -> GenServer.cast(p, {:dealer, new_game_state})
-            i != game_dealer_index -> GenServer.cast(p, {:better, new_game_state})
+            i == game_dealer_index -> Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
+            i != game_dealer_index -> Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
           end
         end)
 
         Enum.to_list(observers)
         |> Enum.each(fn {_, pid} ->
-          GenServer.cast(pid, {:game_state_update, new_game_state})
+          Actors.Player.game_state_update(
+            pid,
+            %{new_game_state: new_game_state}
+          )
         end)
 
         {:noreply, %{state | game_state: new_game_state, behavior: :game}}
 
       _ ->
         Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-          GenServer.cast(p, {:message, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay)})
+          Actors.Player.info_message(p, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
         end)
 
         Enum.to_list(observers)
         |> Enum.each(fn {_, pid} ->
-          GenServer.cast(pid, {:message, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay)})
+          Actors.Player.info_message(pid, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
         end)
 
         {:noreply, %{state | want_to_replay: new_want_to_replay}}

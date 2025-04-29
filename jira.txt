@@ -1,1 +1,2 @@
-1. Nella start_link del Actors.Lobby mettere un Process.monitor(self()) in modo da monitorare Actors.Bridge. Se quest'ultimo muore allora devo stopparmi anche io. Devo fare la stessa cosa del Process.montitor nel Actors.Player verso Actor.Lobby che se si spegne Lobby io devo informare il TableManager. In questo modo posso stare in ascolto se l'utente fa exit o se si chiude la socket
+1. there_is_a_looser must be put into the game_state because the players Actor has to manage a different UI message
+if a complete new game has to start

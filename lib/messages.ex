@@ -4,9 +4,6 @@ defmodule Messages do
   """
 
   defp clear_char, do: "[2J"
-  defp underline, do: "\u001b[0004m"
-  defp nc, do: "\u001b[0;0m"
-
   defp ita_flag, do: "\u{1F1EE}\u{1F1F9}"
 
   def title,
@@ -36,7 +33,13 @@ defmodule Messages do
 
   def you_have_to_play_the_right_suit(card, right_suit), do: "#{card} - You have to play #{right_suit}\n"
 
+  def card_already_used(card), do: "#{card} - You don't have that card\n"
+
   def type_replay_to_play_again(), do: "Type replay to play again\n"
+
+  def game_ends_message(), do: "The game is over\n"
+
+  def type_replay_to_start_a_new_game(), do: "Type replay to start a new game\n"
 
   def end_game_invalid_input(), do: "Type replay to play again \n"
 
@@ -116,25 +119,74 @@ defmodule Messages do
     used_card_count = game_state[:used_card_count]
     info = game_state[:info]
     turn_winner = game_state[:turn_winner]
-    tfcp = game_state[:turn_first_card][:pretty] || "--"
 
-    circle = "\u25CF"
-    v = "\u2503"
-    h = "\u2501"
+    tfcpxxxxxx =
+      if game_state[:turn_first_card][:pretty] do
+        String.pad_trailing(game_state[:turn_first_card][:pretty], 9)
+      else
+        String.pad_trailing("--", 10)
+      end
+
+    [me, p1, p2] = reorder_by_name(players, name)
+
+    # LEADERBOARD, LEGEND and EXAMPLES
+    [{_, first}, {_, second}, {_, third}] = players |> Enum.sort_by(fn {_, %{leaderboard: l}} -> Enum.sum(l) end)
+    there_is_a_looser = third[:is_looser]
+    winner = if there_is_a_looser, do: first, else: nil
+
+    winner_icon =
+      case there_is_a_looser do
+        true -> "👑"
+        false -> ""
+      end
+
+    winner_str_len = if winner_icon == "", do: 19, else: 18
+
+    leaderboardxxxxxxxxxxx = String.pad_trailing(Utils.Colors.with_underline("Leaderboard"), 31)
+    first_leaderboardxx = String.pad_trailing("#{first[:name]} #{first[:leaderboard] |> Enum.sum()} #{winner_icon}", winner_str_len)
+    second_leaderboardx = String.pad_trailing("#{second[:name]} #{second[:leaderboard] |> Enum.sum()}", 19)
+    third_leaderboardxx = String.pad_trailing("#{third[:name]} #{third[:leaderboard] |> Enum.sum()}", 19)
+
+    legendxxxxxxxx = String.pad_trailing(Utils.Colors.with_underline("Legend"), 22)
+    heartsxxxxxxxx = String.pad_trailing("🔴️ Hearts", 15)
+    diamondsxxxxxx = String.pad_trailing("🔵 Diamonds", 15)
+    clubsxxxxxxxxx = String.pad_trailing("🟢 Clubs", 15)
+    spadesxxxxxxxx = String.pad_trailing("⚫️ Spades", 15)
+
+    examplexxxxxxx = String.pad_leading(Utils.Colors.with_underline("Example"), 27)
+    exheartsxxxxxx = String.pad_leading("7h -> 7 🔴️", 14)
+    exdiamondsxxxx = String.pad_leading("jd -> J 🔵", 14)
+    exclubsxxxxxxx = String.pad_leading("ac -> A 🟢", 14)
+    exspadesxxxxxx = String.pad_leading("3s -> 3 ⚫️", 14)
+
+    # RECTANGLE
+    circle =
+      cond do
+        me[:index] === dealer_index -> Utils.Colors.with_cyan("\u25CF")
+        there_is_a_looser && first[:name] == me[:name] -> Utils.Colors.with_green("\u25CF")
+        true -> "\u25CF"
+      end
+
+    v =
+      cond do
+        me[:index] === dealer_index -> Utils.Colors.with_cyan("\u2503")
+        there_is_a_looser && first[:name] == me[:name] -> Utils.Colors.with_green("\u2503")
+        true -> "\u2503"
+      end
+
+    h =
+      cond do
+        me[:index] === dealer_index -> Utils.Colors.with_cyan("\u2501")
+        there_is_a_looser && first[:name] == me[:name] -> Utils.Colors.with_green("\u2501")
+        true -> "\u2501"
+      end
 
     dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
-      circle <> String.duplicate(h, 77) <> circle
-
-    [
-      me,
-      p1,
-      p2
-    ] = reorder_by_name(players, name)
+      "#{circle}" <> String.duplicate("#{h}", 77) <> "#{circle}"
 
     # NAMES
 
-    # TODO: put the name in blue so it is equal to the colored name on the edge of the rectangle
-    dealer_name_bluee =
+    dealer_name_blueexxxx =
       cond do
         used_card_count < Deck.card_count() ->
           {dealer_name, _} =
@@ -142,42 +194,69 @@ defmodule Messages do
             |> Enum.to_list()
             |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
 
-          Utils.String.ensure_min_length("#{dealer_name} you're up 🦉", 19, " ", :right)
+          String.pad_trailing("#{dealer_name} you're up 🦉", 23)
+
+        there_is_a_looser ->
+          String.pad_trailing("#{IO.ANSI.format([:magenta, :bright, "#{winner[:name]} wins 👑"])}", 36)
 
         true ->
-          Utils.String.ensure_min_length("Game ended 🦉", 19, " ", :right)
+          String.pad_trailing("Game ended 🦉", 23)
       end
 
-    p1_name =
-      if p1[:index] == dealer_index do
-        Utils.String.ensure_min_length(
-          "#{IO.ANSI.format([:cyan, p1[:name]])}",
-          19,
-          " ",
-          :left
-        )
-      else
-        Utils.String.ensure_min_length(p1[:name], 10, " ", :left)
-      end
+    p1_namexxxxxxxxxxx =
+      (
+        len_offset = if p1[:is_stopped], do: -1, else: 0
+
+        name_with_icon =
+          cond do
+            winner[:name] == p1[:name] -> "#{p1[:name]} 👑"
+            p1[:is_stopped] -> "#{p1[:name]} 🚫"
+            true -> p1[:name]
+          end
+
+        if p1[:index] == dealer_index do
+          String.pad_leading("#{IO.ANSI.format([:cyan, name_with_icon])}", 30 + len_offset)
+        else
+          String.pad_leading(name_with_icon, 21 + len_offset)
+        end
+      )
 
     p2_name =
-      if p2[:index] == dealer_index do
-        IO.ANSI.format([:cyan, p2[:name]])
-      else
-        p2[:name]
-      end
+      (
+        name_with_icon =
+          cond do
+            winner[:name] == p2[:name] -> "#{p2[:name]} 👑"
+            p2[:is_stopped] -> "#{p2[:name]} 🚫"
+            true -> p2[:name]
+          end
+
+        if p2[:index] == dealer_index do
+          IO.ANSI.format([:cyan, name_with_icon])
+        else
+          name_with_icon
+        end
+      )
 
     me_name =
-      if me[:index] == dealer_index do
-        IO.ANSI.format([:cyan, me[:name]])
-      else
-        me[:name]
-      end
+      (
+        name_with_icon =
+          cond do
+            winner[:name] == me[:name] -> "#{me[:name]} 👑"
+            me[:is_stopped] -> "#{me[:name]} 🚫"
+            true -> me[:name]
+          end
+
+        if me[:index] == dealer_index do
+          IO.ANSI.format([:cyan, name_with_icon])
+        else
+          name_with_icon
+        end
+      )
 
     # CARDS
-    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> Utils.String.ensure_min_length(2, :left)
-    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> Utils.String.ensure_min_length(2, :right)
-    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> Utils.String.ensure_min_length(2, :right)
+    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> String.pad_leading(2)
+    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> String.pad_trailing(2)
+    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> String.pad_trailing(2)
 
     {_, my_cards} =
       me[:cards]
@@ -186,9 +265,9 @@ defmodule Messages do
       |> Enum.map(fn {_, card} ->
         new_p =
           case card do
-            %{used: true} -> Utils.String.ensure_min_length("", 2, :right)
-            %{used: false, pretty: p} -> Utils.String.ensure_min_length(p, 2, :right)
-            %{pretty: p} -> Utils.String.ensure_min_length(p, 2, :right)
+            %{used: true} -> String.pad_trailing("", 2)
+            %{used: false, pretty: p} -> String.pad_trailing(p, 2)
+            %{pretty: p} -> String.pad_trailing(p, 2)
             _ -> "ciao"
           end
 
@@ -206,26 +285,15 @@ defmodule Messages do
       )
 
     # STACK
-    if p1[:name] == turn_winner do
-    else
-      me[:name]
-    end
-
     p1_stack =
       case length(p1[:stack]) do
         0 ->
-          cond do
-            p1[:name] == turn_winner ->
-              Utils.String.ensure_min_length("#{IO.ANSI.format([:light_green, "0"])}", 10, :right)
-
-            p1[:name] != turn_winner ->
-              "0"
-          end
+          "0"
 
         _ ->
           cond do
             p1[:name] == turn_winner ->
-              Utils.String.ensure_min_length("#{IO.ANSI.format([:light_green, "?"])}", 10, :right)
+              String.pad_trailing("#{IO.ANSI.format([:yellow, :bright, "?"])}", 10)
 
             p1[:name] != turn_winner ->
               "?"
@@ -235,18 +303,12 @@ defmodule Messages do
     p2_stack =
       case length(p2[:stack]) do
         0 ->
-          cond do
-            p2[:name] == turn_winner ->
-              "#{IO.ANSI.format([:light_green, "0"])}"
-
-            p2[:name] != turn_winner ->
-              "0"
-          end
+          "0"
 
         _ ->
           cond do
             p2[:name] == turn_winner ->
-              "#{IO.ANSI.format([:light_green, "?"])}"
+              "#{IO.ANSI.format([:yellow, :bright, "?"])}"
 
             p2[:name] != turn_winner ->
               "?"
@@ -256,18 +318,12 @@ defmodule Messages do
     me_stack =
       case length(me[:stack]) do
         0 ->
-          cond do
-            me[:name] == turn_winner ->
-              "#{IO.ANSI.format([:light_green, "0"])}"
-
-            me[:name] != turn_winner ->
-              "0"
-          end
+          "0"
 
         _ ->
           cond do
             me[:name] == turn_winner ->
-              "#{IO.ANSI.format([:light_green, "?"])}"
+              "#{IO.ANSI.format([:yellow, :bright, "?"])}"
 
             me[:name] != turn_winner ->
               "?"
@@ -275,111 +331,172 @@ defmodule Messages do
       end
 
     # P1 CARDS AND STACK
-    p1_cards_and_stack = "                #{p1_cards}  #{p1_stack}"
+    p1_cards_and_stack = "                #{p1_stack}  #{p1_cards}"
 
     # CURRENT
     p1_curr =
       case get_in(p1, [:current, :pretty]) do
-        "" -> Utils.String.ensure_min_length("", 10, :right)
-        nil -> Utils.String.ensure_min_length("", 10, :right)
-        c -> Utils.String.ensure_min_length(c, 9, :right)
+        "" -> String.pad_trailing("", 10)
+        nil -> String.pad_trailing("", 10)
+        c -> String.pad_trailing(c, 9)
       end
 
     p2_curr =
       case get_in(p2, [:current, :pretty]) do
-        "" -> Utils.String.ensure_min_length("", 10, :left)
-        nil -> Utils.String.ensure_min_length("", 10, :left)
-        c -> Utils.String.ensure_min_length(c, 9, :left)
+        "" -> String.pad_leading("", 10)
+        nil -> String.pad_leading("", 10)
+        c -> String.pad_leading(c, 9)
       end
 
     me_curr =
       case get_in(me, [:current, :pretty]) do
-        "" -> Utils.String.ensure_min_length("", 10, :right)
-        nil -> Utils.String.ensure_min_length("", 10, :right)
-        c -> Utils.String.ensure_min_length(c, 9, :right)
+        "" -> String.pad_trailing("", 10)
+        nil -> String.pad_trailing("", 10)
+        c -> String.pad_trailing(c, 9)
       end
 
     # END GAME
-    p1_end_game_cards =
+    end_game_label =
+      case used_card_count == Deck.card_count() do
+        true ->
+          String.pad_trailing(Utils.Colors.with_underline("Player"), 24) <>
+            String.pad_trailing(Utils.Colors.with_underline("Points"), 22) <>
+            Utils.Colors.with_underline("Cards") <>
+            "\n"
+
+        false ->
+          ""
+      end
+
+    {p1_end_game_cards, _, _, _} =
       p1[:stack]
       |> Enum.to_list()
-      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, %{points: p, pretty: pr}} ->
-        case p do
-          1 -> "#{underline()}#{pr}#{nc()}"
-          0.34 -> "#{underline()}#{pr}#{nc()}"
-          _ -> pr
-        end
-      end)
-      |> Enum.join("  ")
+      |> Enum.sort_by(fn {_, %{points: p}} -> -p end)
+      |> Enum.reduce({"", 0, 0, nil}, fn {_, %{points: p, key: k}}, {acc, count_1, count_034, prev_p} ->
+        # Colorize the key
+        colored_key =
+          case p do
+            1 -> Utils.Colors.with_red_bright(k)
+            0.34 -> Utils.Colors.with_yellow(k)
+            _ -> k
+          end
 
-    p2_end_game_cards =
+        # Determine if points changed from previous card
+        space_after_change = if prev_p != nil and prev_p != p, do: "  ", else: ""
+
+        # Increment counters if points are 1 or 0.34
+        count_1 = if p == 1, do: count_1 + 1, else: count_1
+        count_034 = if p == 0.34, do: count_034 + 1, else: count_034
+
+        # Add extra space after every 3rd card with points == 1 or 0.34
+        space_after_1 = if p == 1 and rem(count_1, 3) == 0, do: "  ", else: ""
+        space_after_034 = if p == 0.34 and rem(count_034, 3) == 0, do: "  ", else: ""
+
+        # Combine all spaces
+        spaces = space_after_1 <> space_after_034 <> " "
+
+        # Append to accumulator
+        {"#{acc}#{space_after_change}#{colored_key}#{spaces}", count_1, count_034, p}
+      end)
+
+    {p2_end_game_cards, _, _, _} =
       p2[:stack]
       |> Enum.to_list()
-      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, %{points: p, pretty: pr}} ->
-        case p do
-          1 -> "#{underline()}#{pr}#{nc()}"
-          0.34 -> "#{underline()}#{pr}#{nc()}"
-          _ -> pr
-        end
-      end)
-      |> Enum.join(" ")
+      |> Enum.sort_by(fn {_, %{points: p}} -> -p end)
+      |> Enum.reduce({"", 0, 0, nil}, fn {_, %{points: p, key: k}}, {acc, count_1, count_034, prev_p} ->
+        # Colorize the key
+        colored_key =
+          case p do
+            1 -> Utils.Colors.with_red_bright(k)
+            0.34 -> Utils.Colors.with_yellow(k)
+            _ -> k
+          end
 
-    me_end_game_cards =
+        # Determine if points changed from previous card
+        space_after_change = if prev_p != nil and prev_p != p, do: "  ", else: ""
+
+        # Increment counters if points are 1 or 0.34
+        count_1 = if p == 1, do: count_1 + 1, else: count_1
+        count_034 = if p == 0.34, do: count_034 + 1, else: count_034
+
+        # Add extra space after every 3rd card with points == 1 or 0.34
+        space_after_1 = if p == 1 and rem(count_1, 3) == 0, do: "  ", else: ""
+        space_after_034 = if p == 0.34 and rem(count_034, 3) == 0, do: "  ", else: ""
+
+        # Combine all spaces
+        spaces = space_after_1 <> space_after_034 <> " "
+
+        # Append to accumulator
+        {"#{acc}#{space_after_change}#{colored_key}#{spaces}", count_1, count_034, p}
+      end)
+
+    {me_end_game_cards, _, _, _} =
       me[:stack]
       |> Enum.to_list()
-      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, %{points: p, pretty: pr}} ->
-        case p do
-          1 -> "#{underline()}#{pr}#{nc()}"
-          0.34 -> "#{underline()}#{pr}#{nc()}"
-          _ -> pr
-        end
-      end)
-      |> Enum.join(" ")
+      |> Enum.sort_by(fn {_, %{points: p}} -> -p end)
+      |> Enum.reduce({"", 0, 0, nil}, fn {_, %{points: p, key: k}}, {acc, count_1, count_034, prev_p} ->
+        # Colorize the key
+        colored_key =
+          case p do
+            1 -> Utils.Colors.with_red_bright(k)
+            0.34 -> Utils.Colors.with_yellow(k)
+            _ -> k
+          end
 
-    {p1_end_game, p2_end_game, me_end_game} =
+        # Determine if points changed from previous card
+        space_after_change = if prev_p != nil and prev_p != p, do: "  ", else: ""
+
+        # Increment counters if points are 1 or 0.34
+        count_1 = if p == 1, do: count_1 + 1, else: count_1
+        count_034 = if p == 0.34, do: count_034 + 1, else: count_034
+
+        # Add extra space after every 3rd card with points == 1 or 0.34
+        space_after_1 = if p == 1 and rem(count_1, 3) == 0, do: "  ", else: ""
+        space_after_034 = if p == 0.34 and rem(count_034, 3) == 0, do: "  ", else: ""
+
+        # Combine all spaces
+        spaces = space_after_1 <> space_after_034 <> " "
+
+        # Append to accumulator
+        {"#{acc}#{space_after_change}#{colored_key}#{spaces}", count_1, count_034, p}
+      end)
+
+    {me_end_game, p1_end_game, p2_end_game} =
       cond do
         used_card_count == Deck.card_count() ->
-          {"#{p1[:name]} (#{p1[:points]}):  #{p1_end_game_cards}", "#{p2[:name]} (#{p2[:points]}):  #{p2_end_game_cards}", "#{me[:name]} (#{me[:points]}):  #{me_end_game_cards}"}
+          p1_name =
+            cond do
+              winner[:name] == p1[:name] -> "👑 #{p1[:name]}"
+              winner[:name] && winner[:name] != p1[:name] -> "☹️ #{p1[:name]}"
+              p1[:is_stopped] -> "🚫 #{p1[:name]}"
+              true -> p1[:name]
+            end
+
+          p2_name =
+            cond do
+              winner[:name] == p2[:name] -> "👑 #{p2[:name]}"
+              winner[:name] && winner[:name] != p2[:name] -> "☹️ #{p2[:name]}"
+              p2[:is_stopped] -> "🚫 #{p2[:name]}"
+              true -> p2[:name]
+            end
+
+          me_name =
+            cond do
+              winner[:name] == me[:name] -> "👑 #{me[:name]}"
+              winner[:name] && winner[:name] != me[:name] -> "☹️ #{me[:name]}"
+              me[:is_stopped] -> "🚫 #{me[:name]}"
+              true -> me[:name]
+            end
+
+          {"#{String.pad_trailing(me_name, 14)} #{String.pad_trailing("#{me[:points]}", 12)} #{me_end_game_cards}",
+           "#{String.pad_trailing(p1_name, 14)} #{String.pad_trailing("#{p1[:points]}", 12)} #{p1_end_game_cards}",
+           "#{String.pad_trailing(p2_name, 14)} #{String.pad_trailing("#{p2[:points]}", 12)} #{p2_end_game_cards}"}
 
         true ->
           {"", "", ""}
       end
 
-    end_game_label =
-      case used_card_count == Deck.card_count() do
-        true -> "End game"
-        false -> ""
-      end
-
-    # LEADERBOARD
-    [{_, first}, {_, second}, {_, third}] = players |> Enum.sort_by(fn {_, %{leaderboard: l}} -> Enum.sum(l) end)
-    there_is_a_looser = third[:is_looser]
-
-    winner_icon =
-      case there_is_a_looser do
-        true -> "👑"
-        false -> ""
-      end
-
-    leaderboardxxxxxxxxxxx = Utils.String.ensure_min_length(Utils.Colors.with_underline("Leaderboard"), 31, :right)
-    first_leaderboardxx = Utils.String.ensure_min_length("#{first[:name]} #{first[:leaderboard] |> Enum.sum()} #{winner_icon}", 19, :right)
-    second_leaderboardx = Utils.String.ensure_min_length("#{second[:name]} #{second[:leaderboard] |> Enum.sum()}", 19, :right)
-    third_leaderboardxx = Utils.String.ensure_min_length("#{third[:name]} #{third[:leaderboard] |> Enum.sum()}", 19, :right)
-
-    legendxxxxxxxx = Utils.String.ensure_min_length(Utils.Colors.with_underline("Legend"), 22, :right)
-    heartsxxxxxxxx = Utils.String.ensure_min_length("Hearts 🔴️", 15, :right)
-    diamondsxxxxxx = Utils.String.ensure_min_length("Diamonds 🔵", 15, :right)
-    clubsxxxxxxxxx = Utils.String.ensure_min_length("Clubs 🟢", 15, :right)
-    spadesxxxxxxxx = Utils.String.ensure_min_length("Spades ⚫️", 15, :right)
-
-    examplexxxxxxx = Utils.String.ensure_min_length(Utils.Colors.with_underline("Example"), 27, :left)
-    exheartsxxxxxx = Utils.String.ensure_min_length("7h -> 7 🔴️", 14, :left)
-    exdiamondsxxxx = Utils.String.ensure_min_length("jd -> J 🔵", 14, :left)
-    exclubsxxxxxxx = Utils.String.ensure_min_length("ac -> A 🟢", 14, :left)
-    exspadesxxxxxx = Utils.String.ensure_min_length("3s -> 3 ⚫️", 14, :left)
+    end_game_card_value_recap = "\n#{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
 
     """
     #{clear_char()}
@@ -392,12 +509,14 @@ defmodule Messages do
                                                                #{spadesxxxxxxxx}               #{exspadesxxxxxx}
 
 
-                              First: #{tfcp}                       #{info}
+
+
+                              First: #{tfcpxxxxxx}               #{info}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
-                              #{v}                               #{dealer_name_bluee}                          #{v}
+                              #{v}                               #{dealer_name_blueexxxx}                      #{v}
                               #{v}                                                                             #{v}
                               #{v}                                                                             #{v}
-                  #{p1_name}  #{v}     #{p1_curr}                                               #{p2_curr}     #{v}  #{p2_name}
+       #{p1_namexxxxxxxxxxx}  #{v}     #{p1_curr}                                               #{p2_curr}     #{v}  #{p2_name}
        #{p1_cards_and_stack}  #{v}                                                                             #{v}  #{p2_cards}  #{p2_stack}
                               #{v}                                                                             #{v}
                               #{v}                                                                             #{v}
@@ -412,10 +531,13 @@ defmodule Messages do
 
 
 
-                              #{end_game_label}
-                              #{me_end_game}
-                              #{p1_end_game}
-                              #{p2_end_game}
+
+    #{end_game_label}
+    #{me_end_game}
+    #{p1_end_game}
+    #{p2_end_game}
+    #{end_game_card_value_recap}
+
 
     #{piggyback}
     """
