@@ -117,8 +117,8 @@ defmodule Messages do
     players = game_state[:players]
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
-    info = game_state[:info]
     turn_winner = game_state[:turn_winner]
+    prev_turn = game_state[:prev_turn]
 
     [me, p1, p2] = reorder_by_name(players, name)
 
@@ -171,6 +171,36 @@ defmodule Messages do
         true -> "\u2501"
       end
 
+    pretties =
+      prev_turn
+      |> Enum.sort_by(fn {_, %{ranking: r}} -> r end, :desc)
+      |> Enum.map(fn {_, %{pretty: p}} -> p end)
+      |> Enum.join(" ")
+
+    infoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
+      cond do
+        turn_winner == p1[:name] ->
+          String.pad_trailing("#{Utils.Colors.with_yellow_bright(turn_winner)}: #{pretties}", 89)
+
+        turn_winner == me[:name] ->
+          str = "#{Utils.Colors.with_yellow_bright(turn_winner)}: #{pretties}"
+          total_len = 89
+          str_len = String.length(str)
+          total_padding = max(total_len - str_len, 0)
+          left_padding = div(total_padding, 2)
+          right_padding = total_padding - left_padding
+
+          str
+          |> String.pad_leading(str_len + left_padding)
+          |> String.pad_trailing(str_len + left_padding + right_padding)
+
+        turn_winner == p2[:name] ->
+          String.pad_leading("#{Utils.Colors.with_yellow_bright(turn_winner)}: #{pretties}", 89)
+
+        true ->
+          ""
+      end
+
     dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
       "#{circle}" <> String.duplicate("#{h}", 77) <> "#{circle}"
 
@@ -178,19 +208,19 @@ defmodule Messages do
     a =
       cond do
         p1[:name] == turn_winner ->
-          IO.ANSI.format([:yellow, :bright, "\u2503"])
+          String.pad_trailing("#{IO.ANSI.format([:yellow, :bright, "\u2503"])}", 17)
 
         p1[:name] != turn_winner ->
-          " "
+          String.pad_trailing(" ", 4)
       end
 
     b =
       cond do
         p2[:name] == turn_winner ->
-          IO.ANSI.format([:yellow, :bright, "\u2503"])
+          String.pad_leading("#{IO.ANSI.format([:yellow, :bright, "\u2503"])}", 17)
 
         p2[:name] != turn_winner ->
-          " "
+          String.pad_leading(" ", 4)
       end
 
     cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
@@ -535,21 +565,21 @@ defmodule Messages do
 
 
 
-                                                               #{info}
+                              #{infoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
-                              #{v}#{a}                               #{dealer_name_blueexxxx}                    #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}            #{p1_curr}   #{p2_curr}             #{p2_last}  #{b}#{v}  #{p2_name} #{p2_stack}
-       #{p1_cards_and_stack}  #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                    #{me_curr}                             #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
-                              #{v}#{a}                                     #{me_last}                            #{b}#{v}
-                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}                                   #{dealer_name_blueexxxx}                  #{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}          #{p1_curr}     #{p2_curr}       #{p2_last}  #{b}#{v}  #{p2_name} #{p2_stack}
+       #{p1_cards_and_stack}  #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                    #{me_curr}                       #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
+                              #{v}#{a}                                     #{me_last}                      #{b}#{v}
+                              #{v}#{a}                                                                     #{b}#{v}
                               #{v}  #{cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}  #{v}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
 

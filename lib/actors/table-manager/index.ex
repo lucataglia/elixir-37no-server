@@ -39,7 +39,7 @@ defmodule Actors.NewTableManager do
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, last, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
+      game_state: %{prev_turn: [], turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
     }
 
   defp end_game_init_state(there_is_a_looser, game_dealer_index, players, observers),
@@ -67,7 +67,17 @@ defmodule Actors.NewTableManager do
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, last, stack, is_looser, is_stopped}}
       # }
-      game_state: %{turn_first_card: nil, dealer_index: game_dealer_index, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: there_is_a_looser, players: players, observers: observers}
+      game_state: %{
+        prev_turn: [],
+        turn_first_card: nil,
+        dealer_index: game_dealer_index,
+        used_card_count: 0,
+        info: "",
+        turn_winner: "",
+        there_is_a_looser: there_is_a_looser,
+        players: players,
+        observers: observers
+      }
     }
 
   def start_link(uuid, raw_players) do
@@ -177,12 +187,6 @@ defmodule Actors.NewTableManager do
       length(new_current_turn) == 3 ->
         [{winner_name, _} | _] = new_current_turn |> Enum.sort_by(fn {_, %{ranking: r}} -> r end, :desc)
 
-        pretties =
-          new_current_turn
-          |> Enum.sort_by(fn {_, %{ranking: r}} -> r end, :desc)
-          |> Enum.map(fn {_, %{pretty: p}} -> p end)
-          |> Enum.join(" ")
-
         # Update winner player
         winner_index = game_state[:players][winner_name][:index]
         winner_new_stack = game_state[:players][winner_name][:stack] ++ new_current_turn
@@ -220,7 +224,7 @@ defmodule Actors.NewTableManager do
 
             [{name_o1, o1}, {name_o2, o2}] ->
               new_o1 = o1 |> Map.put(:current, nil) |> Map.put(:last, o1[:current])
-              new_o2 = o2 |> Map.put(:current, nil) |> Map.put(:last, curr_card)
+              new_o2 = o2 |> Map.put(:current, nil) |> Map.put(:last, o2[:current])
 
               {{name_o1, new_o1}, {name_o2, new_o2}}
           end
@@ -234,9 +238,9 @@ defmodule Actors.NewTableManager do
         # New game state
         new_game_state = %{
           game_state
-          | turn_first_card: nil,
+          | prev_turn: new_current_turn,
+            turn_first_card: nil,
             dealer_index: winner_index,
-            info: "#{IO.ANSI.format([:yellow, :bright, winner_name])}: #{pretties}",
             turn_winner: winner_name,
             used_card_count: new_used_card_count,
             players: new_players
