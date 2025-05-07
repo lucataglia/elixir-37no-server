@@ -120,13 +120,6 @@ defmodule Messages do
     info = game_state[:info]
     turn_winner = game_state[:turn_winner]
 
-    tfcpxxxxxx =
-      if game_state[:turn_first_card][:pretty] do
-        String.pad_trailing(game_state[:turn_first_card][:pretty], 9)
-      else
-        String.pad_trailing("--", 10)
-      end
-
     [me, p1, p2] = reorder_by_name(players, name)
 
     # LEADERBOARD, LEGEND and EXAMPLES
@@ -162,56 +155,75 @@ defmodule Messages do
     # RECTANGLE
     circle =
       cond do
-        me[:index] === dealer_index -> Utils.Colors.with_cyan("\u25CF")
-        there_is_a_looser && first[:name] == me[:name] -> Utils.Colors.with_green("\u25CF")
+        there_is_a_looser -> Utils.Colors.with_magenta("\u25CF")
         true -> "\u25CF"
       end
 
     v =
       cond do
-        me[:index] === dealer_index -> Utils.Colors.with_cyan("\u2503")
-        there_is_a_looser && first[:name] == me[:name] -> Utils.Colors.with_green("\u2503")
+        there_is_a_looser -> Utils.Colors.with_magenta("\u2503")
         true -> "\u2503"
       end
 
     h =
       cond do
-        me[:index] === dealer_index -> Utils.Colors.with_cyan("\u2501")
-        there_is_a_looser && first[:name] == me[:name] -> Utils.Colors.with_green("\u2501")
+        there_is_a_looser -> Utils.Colors.with_magenta("\u2501")
         true -> "\u2501"
       end
 
     dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
       "#{circle}" <> String.duplicate("#{h}", 77) <> "#{circle}"
 
+    # TURN_WINNER
+    a =
+      cond do
+        p1[:name] == turn_winner ->
+          IO.ANSI.format([:yellow, :bright, "\u2503"])
+
+        p1[:name] != turn_winner ->
+          " "
+      end
+
+    b =
+      cond do
+        p2[:name] == turn_winner ->
+          IO.ANSI.format([:yellow, :bright, "\u2503"])
+
+        p2[:name] != turn_winner ->
+          " "
+      end
+
+    cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx =
+      cond do
+        me[:name] == turn_winner ->
+          String.duplicate("#{IO.ANSI.format([:yellow, :bright, "\u2501"])}", 73)
+
+        me[:name] != turn_winner ->
+          String.duplicate(" ", 73)
+      end
+
     # NAMES
 
     dealer_name_blueexxxx =
       cond do
-        used_card_count < Deck.card_count() ->
-          {dealer_name, _} =
-            players
-            |> Enum.to_list()
-            |> Enum.find(fn {_, %{index: i}} -> i == dealer_index end)
-
-          String.pad_trailing("#{dealer_name} you're up 🦉", 23)
-
         there_is_a_looser ->
           String.pad_trailing("#{IO.ANSI.format([:magenta, :bright, "#{winner[:name]} wins 👑"])}", 36)
 
         true ->
-          String.pad_trailing("Game ended 🦉", 23)
+          String.pad_trailing("", 24)
       end
+
+    p1_lastxxx = if p1[:last], do: String.pad_trailing("#{Utils.Colors.with_yellow_bright(p1[:last][:key])}", 25), else: String.pad_leading("", 13)
+    p2_last = if p2[:last], do: String.pad_leading("#{Utils.Colors.with_yellow_bright(p2[:last][:key])}", 24), else: String.pad_leading("", 10)
+    me_last = if me[:last], do: String.pad_trailing("#{Utils.Colors.with_yellow_bright(me[:last][:key])}", 23), else: String.pad_leading("", 10)
 
     p1_namexxxxxxxxxxx =
       (
-        len_offset = if p1[:is_stopped], do: -1, else: 0
-
-        name_with_icon =
+        {len_offset, name_with_icon} =
           cond do
-            winner[:name] == p1[:name] -> "#{p1[:name]} 👑"
-            p1[:is_stopped] -> "#{p1[:name]} 🚫"
-            true -> p1[:name]
+            winner[:name] == p1[:name] -> {-1, "#{p1[:name]} 👑"}
+            p1[:is_stopped] -> {-1, "#{p1[:name]} 🚫"}
+            true -> {0, p1[:name]}
           end
 
         if p1[:index] == dealer_index do
@@ -253,10 +265,21 @@ defmodule Messages do
         end
       )
 
+    # IO.ANSI.format([:cyan, "  ┌──────────────────┐")
+    # IO.ANSI.format([:cyan, "  │ It's your turn!  │")
+    # IO.ANSI.format([:cyan, "  └──────────────────┘")
+    # IO.ANSI.format([:cyan, "     ➤"))
+    owl_line_one_______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "┌──────────────────┐"]), else: ""
+    owl_line_two_______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "│ It's your turn!! │"]), else: ""
+    owl_line_three_____ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "└──────────────────┘"]), else: ""
+    owl_line_four______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "        \\"]), else: ""
+    owl_line_five______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         \\"]), else: ""
+    owl_line_six_______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          ,_,"]), else: ""
+    owl_line_seven_____ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (O,O)"]), else: ""
+    owl_line_eight_____ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (   )"]), else: ""
+    owl_line_nine______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          \" \""]), else: ""
+
     # CARDS
-    p1_cards = length(p1[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> String.pad_leading(2)
-    p2_cards = length(p2[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> String.pad_trailing(2)
-    me_cards = length(me[:cards] |> Enum.to_list() |> Enum.filter(fn {_, %{used: u}} -> !u end)) |> to_string |> String.pad_trailing(2)
 
     {_, my_cards} =
       me[:cards]
@@ -279,7 +302,7 @@ defmodule Messages do
           if s == prev do
             {s, "#{acc}#{p} "}
           else
-            {s, "#{acc}  ⏺  #{p} "}
+            {s, "#{acc}     #{p} "}
           end
         end
       )
@@ -331,7 +354,7 @@ defmodule Messages do
       end
 
     # P1 CARDS AND STACK
-    p1_cards_and_stack = "                #{p1_stack}  #{p1_cards}"
+    p1_cards_and_stack = "                    #{p1_stack}"
 
     # CURRENT
     p1_curr =
@@ -355,10 +378,6 @@ defmodule Messages do
         c -> String.pad_trailing(c, 9)
       end
 
-    p1_lastxxx = if p1[:last], do: String.pad_leading("#{Utils.Colors.with_yellow_bright(p1[:last][:pretty])}", 25), else: String.pad_leading("", 13)
-    p2_last = if p2[:last], do: Utils.Colors.with_yellow_bright(p2[:last][:pretty]), else: ""
-    me_last = if me[:last], do: Utils.Colors.with_yellow_bright(me[:last][:pretty]), else: ""
-
     # END GAME
     end_game_label =
       case used_card_count == Deck.card_count() do
@@ -369,7 +388,7 @@ defmodule Messages do
             "\n"
 
         false ->
-          ""
+          String.duplicate(" ", 16)
       end
 
     {p1_end_game_cards, _, _, _} =
@@ -497,7 +516,8 @@ defmodule Messages do
            "#{String.pad_trailing(p2_name, 14)} #{String.pad_trailing("#{p2[:points]}", 12)} #{p2_end_game_cards}"}
 
         true ->
-          {"", "", ""}
+          str = String.duplicate(" ", 13)
+          {str, str, str}
       end
 
     end_game_card_value_recap = "\n#{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
@@ -515,32 +535,37 @@ defmodule Messages do
 
 
 
-
-                              First: #{tfcpxxxxxx}               #{info}
+                                                               #{info}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
-                              #{v}                               #{dealer_name_blueexxxx}                      #{v}
-                              #{v}                                                                             #{v}
-                              #{v}                                                                             #{v}
-       #{p1_namexxxxxxxxxxx}  #{v}            #{p1_curr}                                 #{p2_curr}            #{v}  #{p2_name}   #{p2_last}
-       #{p1_cards_and_stack}  #{v}                                                                             #{v}  #{p2_cards}  #{p2_stack}
-               #{p1_lastxxx}  #{v}                                                                             #{v}
-                              #{v}                                     #{me_curr}                              #{v}
-                              #{v}                                                                             #{v}
-                              #{v}                                                                             #{v}
+                              #{v}#{a}                               #{dealer_name_blueexxxx}                    #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}            #{p1_curr}   #{p2_curr}             #{p2_last}  #{b}#{v}  #{p2_name} #{p2_stack}
+       #{p1_cards_and_stack}  #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                    #{me_curr}                             #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}#{a}                                     #{me_last}                            #{b}#{v}
+                              #{v}#{a}                                                                           #{b}#{v}
+                              #{v}  #{cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}  #{v}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
 
                               #{my_cards}
 
-                                                                   #{me_name}   #{me_last}
-                                                                   #{me_cards}  #{me_stack}
+                                                                   #{me_name} #{me_stack}
 
-
-
-
-    #{end_game_label}
-    #{me_end_game}
-    #{p1_end_game}
-    #{p2_end_game}
+                                                                   #{owl_line_one_______}
+                                                                   #{owl_line_two_______}
+                                                                   #{owl_line_three_____}
+                                                                   #{owl_line_four______}
+                                                                   #{owl_line_five______}
+    #{end_game_label}                                              #{owl_line_six_______}
+    #{me_end_game}                                                 #{owl_line_seven_____}
+    #{p1_end_game}                                                 #{owl_line_eight_____}
+    #{p2_end_game}                                                 #{owl_line_nine______}
     #{end_game_card_value_recap}
     #{end_game_card_hierarchy_recap}
 

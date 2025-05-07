@@ -26,11 +26,11 @@ defmodule MyApp.SocketTest do
     # {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, active: false])
+    {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
-    pid = spawn_link(fn -> loop(sock1) end)
+    pid = spawn_link(fn -> loop(sock3) end)
 
-    TCP.controlling_process(sock1, pid)
+    TCP.controlling_process(sock3, pid)
 
     login_action(sock1)
     login_action(sock2)
@@ -273,11 +273,11 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "6h")
     play_card(sock2, "js")
 
-    # replay(sock1)
-    # replay(sock2)
-    # replay(sock3)
-    #
-    # exit_fn(sock2)
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    exit_fn(sock2)
     # Optionally wait for processing (if asynchronous)
     Process.sleep(2000)
 
@@ -317,7 +317,7 @@ defmodule MyApp.SocketTest do
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(15)
+    Process.sleep(100)
   end
 
   defp replay(socket) do

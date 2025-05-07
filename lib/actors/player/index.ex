@@ -97,7 +97,7 @@ defmodule Actors.Player do
   # JOIN AS OBSERVER
   @impl true
   def handle_cast({@observer, new_game_state, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
-    GenServer.cast(parent_pid, {:game_start})
+    Actors.Lobby.game_start(parent_pid)
 
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
@@ -107,7 +107,7 @@ defmodule Actors.Player do
   # REJOIN SUCCESS - as dealer
   @impl true
   def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
-    GenServer.cast(parent_pid, {:game_start})
+    Actors.Lobby.game_start(parent_pid)
 
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
@@ -117,7 +117,7 @@ defmodule Actors.Player do
   # REJOIN SUCCESS - as better
   @impl true
   def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
-    GenServer.cast(parent_pid, {:game_start})
+    Actors.Lobby.game_start(parent_pid)
 
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
@@ -127,7 +127,7 @@ defmodule Actors.Player do
   # STATE - INIT (behavior is :dealer or :better)
   @impl true
   def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, parent_pid: parent_pid} = state) do
-    GenServer.cast(parent_pid, {:game_start})
+    Actors.Lobby.game_start(parent_pid)
 
     info_message(self(), Messages.print_table(game_state, n, Actors.Player.Messages.good_luck()))
 
@@ -140,6 +140,8 @@ defmodule Actors.Player do
         {@recv, data},
         %{game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
       ) do
+    IO.puts("#{Utils.Colors.with_green("[#{name}]")} (Player) recv: #{data}")
+
     case Utils.Regex.check_is_valid_card_key(data) do
       {:error, :invalid_input} ->
         piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])

@@ -25,25 +25,6 @@ defmodule Actors.Bridge do
     GenServer.start_link(__MODULE__, init_state(client))
   end
 
-  # PRINT MESSAGES
-  @impl true
-  def handle_cast({:message, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.message(msg))
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_cast({:warning, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.warning(msg))
-    {:noreply, state}
-  end
-
-  @impl true
-  def handle_cast({:success, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.success(msg))
-    {:noreply, state}
-  end
-
   # STOP
   @impl true
   def handle_cast({@exit}, state) do
@@ -82,12 +63,6 @@ defmodule Actors.Bridge do
     GenServer.cast(recipient_actor, envelop)
 
     {:noreply, state}
-  end
-
-  # GOTO MENU - Actor.Login new recipient
-  @impl true
-  def handle_cast({:goto_menu}, %{client: client} = state) do
-    {:game, %{state | recipient_actor: Actors.Login.start_link(client, self())}}
   end
 
   # DEGUB that march everything

@@ -158,6 +158,8 @@ defmodule Actors.NewTableManager do
   # GAME
   @impl true
   def handle_cast({@choice, name, card}, %{current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
+    IO.puts("#{Utils.Colors.with_magenta("[#{name}]")} (Player) choice: #{card[:key]}")
+
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
     observers = game_state[:observers]
@@ -275,6 +277,7 @@ defmodule Actors.NewTableManager do
                   |> Map.put(:points, new_points)
                   |> Map.put(:leaderboard, new_leaderboard)
                   |> Map.put(:is_looser, is_looser)
+                  |> Map.put(:last, nil)
 
                 {n, new_p, is_looser}
               end)
@@ -318,6 +321,7 @@ defmodule Actors.NewTableManager do
 
           # GAME NOT ENDED
           true ->
+            IO.puts("")
             # Tells who is the new dealer
             Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
               cond do
