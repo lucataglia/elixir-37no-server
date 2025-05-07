@@ -338,53 +338,32 @@ defmodule Messages do
       )
 
     # STACK
-    p1_stack =
+    p1s =
       case length(p1[:stack]) do
         0 ->
-          "0"
+          "      "
 
         _ ->
-          cond do
-            p1[:name] == turn_winner ->
-              String.pad_trailing("#{IO.ANSI.format([:yellow, :bright, "?"])}", 10)
-
-            p1[:name] != turn_winner ->
-              "?"
-          end
+          "    🃏"
       end
 
-    p2_stack =
+    p2s =
       case length(p2[:stack]) do
         0 ->
-          "0"
+          ""
 
         _ ->
-          cond do
-            p2[:name] == turn_winner ->
-              "#{IO.ANSI.format([:yellow, :bright, "?"])}"
-
-            p2[:name] != turn_winner ->
-              "?"
-          end
+          "🃏"
       end
 
-    me_stack =
+    mes =
       case length(me[:stack]) do
         0 ->
-          "0"
+          ""
 
         _ ->
-          cond do
-            me[:name] == turn_winner ->
-              "#{IO.ANSI.format([:yellow, :bright, "?"])}"
-
-            me[:name] != turn_winner ->
-              "?"
-          end
+          "🃏"
       end
-
-    # P1 CARDS AND STACK
-    p1_cards_and_stack = "                    #{p1_stack}"
 
     # CURRENT
     p1_curr =
@@ -573,8 +552,8 @@ defmodule Messages do
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
-       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}          #{p1_curr}     #{p2_curr}       #{p2_last}  #{b}#{v}  #{p2_name} #{p2_stack}
-       #{p1_cards_and_stack}  #{v}#{a}                                                                     #{b}#{v}
+       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}          #{p1_curr}     #{p2_curr}       #{p2_last}  #{b}#{v}  #{p2_name} #{p2s}
+                      #{p1s}  #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                    #{me_curr}                       #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
@@ -585,7 +564,7 @@ defmodule Messages do
 
                               #{my_cards}
 
-                                                                   #{me_name} #{me_stack}
+                                                                   #{me_name} #{mes}
 
                                                                    #{owl_line_one_______}
                                                                    #{owl_line_two_______}
