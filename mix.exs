@@ -13,6 +13,8 @@ defmodule Elixir37noServer.MixProject do
 
   # Run "mix help compile.app" to learn about applications.
   def application do
+    port = String.to_integer(System.get_env("PORT") || "4000")
+
     case Mix.env() do
       :test ->
         [extra_applications: [:logger]]
@@ -20,7 +22,7 @@ defmodule Elixir37noServer.MixProject do
       _ ->
         [
           extra_applications: [:logger],
-          mod: {SimpleServer, [4000]}
+          mod: {SimpleServer, [port]}
         ]
     end
   end

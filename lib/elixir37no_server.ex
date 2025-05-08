@@ -5,7 +5,7 @@ defmodule SimpleServer do
 
   def start(_, [port]) do
     {:ok, socket} =
-      :gen_tcp.listen(port, [:binary, packet: :line, active: false, reuseaddr: true])
+      :gen_tcp.listen(port, [:binary, packet: :line, active: false, ip: {0,0,0,0}, reuseaddr: true])
 
     Actors.GameManager.start_link()
 

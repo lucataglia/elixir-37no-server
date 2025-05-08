@@ -141,16 +141,16 @@ defmodule Messages do
     third_leaderboardxx = String.pad_trailing("#{third[:name]} #{third[:leaderboard] |> Enum.sum()}", 19)
 
     legendxxxxxxxx = String.pad_trailing(Utils.Colors.with_underline("Legend"), 22)
-    heartsxxxxxxxx = String.pad_trailing("🔴️ Hearts", 15)
-    diamondsxxxxxx = String.pad_trailing("🔵 Diamonds", 15)
-    clubsxxxxxxxxx = String.pad_trailing("🟢 Clubs", 15)
-    spadesxxxxxxxx = String.pad_trailing("⚫️ Spades", 15)
+    heartsxxxxxxxx = String.pad_trailing("#{Deck.heart()} Hearts", 15)
+    diamondsxxxxxx = String.pad_trailing("#{Deck.diamond()} Diamonds", 15)
+    clubsxxxxxxxxx = String.pad_trailing("#{Deck.clubs()} Clubs", 15)
+    spadesxxxxxxxx = String.pad_trailing("#{Deck.spades()} Spades", 15)
 
     examplexxxxxxx = String.pad_leading(Utils.Colors.with_underline("Example"), 27)
-    exheartsxxxxxx = String.pad_leading("7h -> 7 🔴️", 14)
-    exdiamondsxxxx = String.pad_leading("jd -> J 🔵", 14)
-    exclubsxxxxxxx = String.pad_leading("ac -> A 🟢", 14)
-    exspadesxxxxxx = String.pad_leading("3s -> 3 ⚫️", 14)
+    exheartsxxxxxx = String.pad_leading("7h -> 7 #{Deck.heart()}", 14)
+    exdiamondsxxxx = String.pad_leading("jd -> J #{Deck.diamond()}", 14)
+    exclubsxxxxxxx = String.pad_leading("ac -> A #{Deck.clubs()}", 14)
+    exspadesxxxxxx = String.pad_leading("3s -> 3 #{Deck.spades()}", 14)
 
     # RECTANGLE
     circle =
@@ -321,7 +321,7 @@ defmodule Messages do
             %{used: true} -> String.pad_trailing("", 2)
             %{used: false, pretty: p} -> String.pad_trailing(p, 2)
             %{pretty: p} -> String.pad_trailing(p, 2)
-            _ -> "ciao"
+            _ -> ""
           end
 
         {new_p, card[:suit]}
@@ -552,29 +552,29 @@ defmodule Messages do
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
-       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}          #{p1_curr}     #{p2_curr}       #{p2_last}  #{b}#{v}  #{p2_name} #{p2s}
+       #{p1_namexxxxxxxxxxx}  #{v}#{a}  #{p1_lastxxx}       #{p1_curr}     #{p2_curr}          #{p2_last}  #{b}#{v}  #{p2_name} #{p2s}
                       #{p1s}  #{v}#{a}                                                                     #{b}#{v}
-                              #{v}#{a}                                    #{me_curr}                       #{b}#{v}
+                              #{v}#{a}                                 #{me_curr}                          #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
-                              #{v}#{a}                                     #{me_last}                      #{b}#{v}
+                              #{v}#{a}                                  #{me_last}                         #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}  #{cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}  #{v}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
 
                               #{my_cards}
 
-                                                                   #{me_name} #{mes}
+                                                               #{me_name} #{mes}
 
-                                                                   #{owl_line_one_______}
-                                                                   #{owl_line_two_______}
-                                                                   #{owl_line_three_____}
-                                                                   #{owl_line_four______}
-                                                                   #{owl_line_five______}
-    #{end_game_label}                                              #{owl_line_six_______}
-    #{me_end_game}                                                 #{owl_line_seven_____}
-    #{p1_end_game}                                                 #{owl_line_eight_____}
-    #{p2_end_game}                                                 #{owl_line_nine______}
+                                                               #{owl_line_one_______}
+                                                               #{owl_line_two_______}
+                                                               #{owl_line_three_____}
+                                                               #{owl_line_four______}
+                                                               #{owl_line_five______}
+    #{end_game_label}                                          #{owl_line_six_______}
+    #{me_end_game}                                             #{owl_line_seven_____}
+    #{p1_end_game}                                             #{owl_line_eight_____}
+    #{p2_end_game}                                             #{owl_line_nine______}
     #{end_game_card_value_recap}
     #{end_game_card_hierarchy_recap}
 
