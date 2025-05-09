@@ -28,9 +28,9 @@ defmodule MyApp.SocketTest do
     {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
-    pid = spawn_link(fn -> loop(sock3) end)
+    pid = spawn_link(fn -> loop(sock1) end)
 
-    TCP.controlling_process(sock3, pid)
+    TCP.controlling_process(sock1, pid)
 
     login_action(sock1)
     login_action(sock2)
@@ -53,6 +53,7 @@ defmodule MyApp.SocketTest do
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
+    # back_fn(sock1)
     play_card(sock1, "4h")
     play_card(sock2, "5h")
     play_card(sock3, "7h")
@@ -279,7 +280,7 @@ defmodule MyApp.SocketTest do
 
     exit_fn(sock2)
     # Optionally wait for processing (if asynchronous)
-    Process.sleep(2000)
+    Process.sleep(20000)
 
     # Add assertions here based on expected server responses
     # Example: assert_response(sock1, "Welcome message")
@@ -289,6 +290,51 @@ defmodule MyApp.SocketTest do
     TCP.close(sock2)
     TCP.close(sock3)
   end
+
+  # test "test back" do
+  #   # {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+  #   {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+  #   {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+  #   {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+
+  #   pid = spawn_link(fn -> loop(sock1) end)
+
+  #   TCP.controlling_process(sock1, pid)
+
+  #   login_action(sock1)
+  #   login_action(sock2)
+  #   login_action(sock3)
+
+  #   # Optionally wait for processing (if asynchronous)
+  #   Process.sleep(100)
+
+  #   create_user(sock1, "Jeff")
+  #   create_user(sock2, "Joebastian")
+  #   create_user(sock3, "TheFendent")
+
+  #   # Optionally wait for processing (if asynchronous)
+  #   Process.sleep(100)
+
+  #   opt_in(sock1)
+  #   opt_in(sock3)
+  #   opt_in(sock2)
+
+  #   # Optionally wait for processing (if asynchronous)
+  #   Process.sleep(100)
+
+  #   back_fn(sock1)
+
+  #   # Optionally wait for processing (if asynchronous)
+  #   Process.sleep(2000)
+
+  #   # Add assertions here based on expected server responses
+  #   # Example: assert_response(sock1, "Welcome message")
+
+  #   # Cleanup
+  #   TCP.close(sock1)
+  #   TCP.close(sock2)
+  #   TCP.close(sock3)
+  # end
 
   defp loop(socket) do
     receive do
@@ -322,6 +368,11 @@ defmodule MyApp.SocketTest do
 
   defp replay(socket) do
     TCP.send(socket, "replay\n")
+    Process.sleep(100)
+  end
+
+  defp back_fn(socket) do
+    TCP.send(socket, "back\n")
     Process.sleep(100)
   end
 

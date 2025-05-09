@@ -13,9 +13,15 @@ defmodule Actors.NewTableManager do
   @player_rejoin :player_rejoin
   @player_observe :player_observe
   @replay :replay
+  @timer_choice_tick :timer_choice_tick
+  @timer_end_game_tick :timer_end_game_tick
 
-  defp init_state(raw_players),
+  defp timer_millis_choice, do: 30_000
+  defp timer_millis_end_game, do: 600_000
+
+  defp init_state(uuid, raw_players),
     do: %{
+      uuid: uuid,
       behavior: :game,
       deck: Deck.shuffle_and_chunk_deck(),
       # %{
@@ -28,6 +34,9 @@ defmodule Actors.NewTableManager do
 
       # User in STATE - REPLAY
       want_to_replay: [],
+
+      # Timer ref
+      timer: [choice: nil, end_game: nil],
 
       # %{
       #   turn_first_card: %{label, suit, pretty, ranking, point},
@@ -42,8 +51,9 @@ defmodule Actors.NewTableManager do
       game_state: %{prev_turn: [], turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
     }
 
-  defp end_game_init_state(there_is_a_looser, game_dealer_index, players, observers),
+  defp end_game_init_state(uuid, there_is_a_looser, game_dealer_index, players, observers, timer),
     do: %{
+      uuid: uuid,
       behavior: :end_game,
       deck: Deck.shuffle_and_chunk_deck(),
       # %{
@@ -56,6 +66,9 @@ defmodule Actors.NewTableManager do
 
       # User in STATE - REPLAY
       want_to_replay: [],
+
+      # Timer ref
+      timer: timer,
 
       # %{
       #   turn_first_card: %{label, suit, pretty, ranking, point},
@@ -81,7 +94,47 @@ defmodule Actors.NewTableManager do
     }
 
   def start_link(uuid, raw_players) do
-    GenServer.start_link(__MODULE__, init_state(raw_players), name: {:global, uuid})
+    GenServer.start_link(__MODULE__, init_state(uuid, raw_players), name: {:global, uuid})
+  end
+
+  # TIMER: choice
+  @impl true
+  def handle_info({@timer_choice_tick, left, name}, %{timer: timer, game_state: game_state, behavior: :game} = state) do
+    ref = Keyword.get(timer, :choice)
+
+    IO.puts("#{Utils.Colors.with_green("#{Utils.Colors.with_red_bright("Table Manager")} (timer) #{name} timer expired, left: #{left}")}")
+
+    if left == 0 do
+      cards = game_state[:players][name][:cards]
+      turn_first_card = game_state[:turn_first_card]
+      card = Deck.get_a_random_valid_card(cards, turn_first_card)
+
+      IO.puts("#{Utils.Colors.with_green("#{Utils.Colors.with_red_bright("Table Manager")} (timer) #{name} timer expired, random choice: #{card[:key]}")}")
+
+      GenServer.cast(self(), {@choice, name, card})
+
+      :timer.cancel(ref)
+      new_timer = Keyword.put(timer, :choice, nil)
+
+      {:noreply, %{state | timer: new_timer}}
+    else
+      Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
+        Actors.Player.warning_message(p, message: Actors.Player.Messages.timer_left(name, left))
+      end)
+
+      {:ok, ref} = :timer.send_after(timer_millis_choice(), self(), {@timer_choice_tick, left - 1, name})
+      new_timer = Keyword.put(timer, :choice, ref)
+
+      {:noreply, %{state | timer: new_timer}}
+    end
+  end
+
+  # TIMER: end_game
+  @impl true
+  def handle_info(@timer_end_game_tick, %{uuid: uuid} = state) do
+    IO.puts("#{Utils.Colors.with_green("#{Utils.Colors.with_red_bright("Table Manager")} (timer) end game")}")
+
+    {:stop, {:end_game_timer_expired, uuid}, state}
   end
 
   # LEFT THE GAME
@@ -167,8 +220,11 @@ defmodule Actors.NewTableManager do
 
   # GAME
   @impl true
-  def handle_cast({@choice, name, card}, %{current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
-    IO.puts("#{Utils.Colors.with_magenta("[#{name}]")} (Player) choice: #{card[:key]}")
+  def handle_cast({@choice, name, card}, %{uuid: uuid, timer: timer, current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
+    IO.puts("#{Utils.Colors.with_green("#{Utils.Colors.with_red_bright("Table Manager")} (choice) #{name}: #{card[:key]}")}")
+
+    ref = Keyword.get(timer, :choice)
+    :timer.cancel(ref)
 
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
@@ -304,28 +360,36 @@ defmodule Actors.NewTableManager do
 
             case there_is_a_looser do
               true ->
+                {:ok, ref} = :timer.send_after(timer_millis_end_game(), self(), @timer_end_game_tick)
+                new_timer = Keyword.put(timer, :end_game, ref)
+
                 new_game_dealer_index =
                   case dealer_index do
                     nil -> Enum.random(0..2)
                     _ -> dealer_index
                   end
 
-                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state = end_game_init_state(uuid, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers, new_timer)
 
                 # RETURN
-                {:noreply, end_game_state}
+                {:noreply, %{end_game_state | timer: new_timer}}
 
               false ->
+                {:ok, ref} = :timer.send_after(timer_millis_end_game(), self(), @timer_end_game_tick)
+                new_timer = Keyword.put(timer, :end_game, ref)
+
                 new_game_dealer_index = rem(game_dealer_index + 1, 3)
-                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state = end_game_init_state(uuid, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers, new_timer)
 
                 # RETURN
                 {:noreply, end_game_state}
             end
 
-          # GAME NOT ENDED
+          # GAME NOT ENDED: new turn
           true ->
-            IO.puts("")
+            {:ok, ref} = :timer.send_after(timer_millis_choice(), self(), {@timer_choice_tick, 3, winner_name})
+            new_timer = Keyword.put(timer, :choice, ref)
+
             # Tells who is the new dealer
             Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
               cond do
@@ -346,7 +410,7 @@ defmodule Actors.NewTableManager do
             end)
 
             # RETURN
-            {:noreply, %{state | game_state: new_game_state, current_turn: []}}
+            {:noreply, %{state | timer: new_timer, game_state: new_game_state, current_turn: []}}
         end
 
       # SAME TURN
@@ -378,8 +442,16 @@ defmodule Actors.NewTableManager do
           end
         end)
 
+        {_, %{name: dealer_name}} =
+          Enum.find(Enum.to_list(game_state[:players]), fn {_, %{index: i}} ->
+            new_game_state[:dealer_index] == i
+          end)
+
+        {:ok, ref} = :timer.send_after(timer_millis_choice(), self(), {@timer_choice_tick, 3, dealer_name})
+        new_timer = Keyword.put(timer, :choice, ref)
+
         # RETURN
-        {:noreply, %{state | game_state: new_game_state, current_turn: new_current_turn}}
+        {:noreply, %{state | timer: new_timer, game_state: new_game_state, current_turn: new_current_turn}}
     end
   end
 
@@ -448,12 +520,12 @@ defmodule Actors.NewTableManager do
 
       _ ->
         Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-          Actors.Player.info_message(p, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
+          Actors.Player.info_message(p, message: Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
         end)
 
         Enum.to_list(observers)
         |> Enum.each(fn {_, pid} ->
-          Actors.Player.info_message(pid, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
+          Actors.Player.info_message(pid, message: Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
         end)
 
         {:noreply, %{state | want_to_replay: new_want_to_replay}}
@@ -461,7 +533,7 @@ defmodule Actors.NewTableManager do
   end
 
   @impl true
-  def init(%{deck: deck, game_dealer_index: game_dealer_index, game_state: game_state} = initial_state) do
+  def init(%{timer: timer, deck: deck, game_dealer_index: game_dealer_index, game_state: game_state} = initial_state) do
     IO.puts("Table Manager init " <> inspect(self()))
     players = game_state[:players]
 
@@ -495,7 +567,15 @@ defmodule Actors.NewTableManager do
       end
     end)
 
-    {:ok, %{initial_state | game_state: new_game_state}}
+    {_, %{name: dealer_name}} =
+      Enum.find(Enum.to_list(new_players), fn {_, %{index: i}} ->
+        i == game_dealer_index
+      end)
+
+    {:ok, ref} = :timer.send_after(timer_millis_choice(), self(), {@timer_choice_tick, 3, dealer_name})
+    new_timer = Keyword.put(timer, :choice, ref)
+
+    {:ok, %{initial_state | timer: new_timer, game_state: new_game_state}}
   end
 
   # *** Public api ***

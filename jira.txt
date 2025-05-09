@@ -1,2 +1,10 @@
-1. there_is_a_looser must be put into the game_state because the players Actor has to manage a different UI message
-if a complete new game has to start
+Move the timer_tick from the player to the table_manager because when a player type "back" we kill the Actor
+so we need to have the table_manager to manage the timer so the game can still go on for the other players
+✅ 9/5/25
+
+When a game ends and for 5 mins no player write anyting the table_manager has to die and the game_manager
+has to delete that table from the active table
+
+Observer feature is broken. Once the user join as observer he can see
+the card of a player and probably the table_manager don't send
+to the observer all the messages that he should send

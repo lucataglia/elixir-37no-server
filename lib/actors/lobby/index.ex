@@ -21,7 +21,8 @@ defmodule Actors.Lobby do
       client: client,
       name: name,
       parent_pid: parent_pid,
-      player_actor: nil
+      player_actor: nil,
+      monitor: %{}
     }
   end
 
@@ -31,17 +32,42 @@ defmodule Actors.Lobby do
     GenServer.start_link(__MODULE__, init_state(client, name, parent_pid))
   end
 
-  # Handle :DOWN message when the parent dies
   @impl true
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, behavior: @behavior_opted_in} = state) do
-    IO.puts("#{Colors.with_magenta("[#{name}]")} (Lobby) Parent process stopped with reason: #{inspect(reason)}")
+  def handle_info({:DOWN, _ref, :process, pid, reason}, %{name: name, monitor: monitor, behavior: @forward_everything_to_player_actor} = state) do
+    IO.puts("#{Colors.with_magenta("[#{name}]")} (Lobby) stopped with reason: #{inspect(reason)}")
 
-    case Actors.GameManager.remove_player(name) do
-      {:ok, _} ->
-        {:stop, :normal, state}
+    player_pid = monitor[:player_pid]
 
-      {:error} ->
-        {:stop, :normal, state}
+    IO.puts("#{Colors.with_magenta("[#{name}]")} (Lobby) #{Colors.with_yellow("Player Actor")} back")
+
+    cond do
+      pid == player_pid ->
+        warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: "You left the table")
+        {:noreply, %{state | behavior: @behavior_lobby}}
+
+      true ->
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, pid, reason}, %{name: name, monitor: monitor, behavior: @behavior_opted_in} = state) do
+    bridge_pid = monitor[:bridge_pid]
+
+    IO.puts("#{Colors.with_magenta("[#{name}]")} (Lobby) #{Colors.with_yellow("Bridge Actor")} stopped with reason: #{inspect(reason)}")
+
+    cond do
+      pid == bridge_pid ->
+        case Actors.GameManager.remove_player(name) do
+          {:ok, _} ->
+            {:stop, :normal, state}
+
+          {:error} ->
+            {:stop, :normal, state}
+        end
+
+      true ->
+        {:noreply, state}
     end
   end
 
@@ -259,13 +285,14 @@ defmodule Actors.Lobby do
     IO.puts("Actor.Lobby init" <> inspect(self()))
     IO.puts("Actor.Lobby monitor" <> inspect(parent_pid))
 
-    Process.monitor(parent_pid)
-
     {:ok, pid} = Actors.Player.start_link(client, name, self())
+
+    Process.monitor(parent_pid)
+    Process.monitor(pid)
 
     info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}")
 
-    {:ok, %{initial_state | player_actor: pid}}
+    {:ok, %{initial_state | player_actor: pid, monitor: %{bridge_pid: parent_pid, player_pid: pid}}}
   end
 
   def info_message(pid, opts) do

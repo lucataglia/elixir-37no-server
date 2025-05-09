@@ -28,6 +28,30 @@ defmodule Actors.GameManager do
     GenServer.start_link(__MODULE__, init_state, name: @gamemanager)
   end
 
+  # @impl true
+  # def handle_info({:DOWN, _ref, :process, _pid, {:end_game_timer_expired, uuid}}, state) do
+  #   IO.puts("#{Utils.Colors.with_cyan_bright("GameManager")} TableManager end_game_timer")
+  #   active_games = state[:active_games]
+  #   active_players = state[:active_players]
+
+  #   new_active_games = Map.delete(active_games, uuid)
+
+  #   new_active_players =
+  #     Map.new(active_players, fn {name, games} ->
+  #       filtered = Enum.reject(games, fn {u, _desc} -> u == uuid end)
+  #       {name, filtered}
+  #     end)
+
+  #   {:noreply, %{state | active_games: new_active_games, active_players: new_active_players}}
+  # end
+
+  @impl true
+  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+    IO.puts("#{Utils.Colors.with_cyan_bright("GameManager")} TableManager #{inspect(reason)}")
+
+    {:noreply, state}
+  end
+
   @impl true
   def handle_call({@player_opt_in, name, pid}, _from, %{players: players} = state) do
     count = (players |> Map.keys() |> length) + 1
@@ -48,13 +72,16 @@ defmodule Actors.GameManager do
           msg = Messages.new_player_arrived(players_name, 3 - count)
 
           Enum.each(Enum.to_list(new_players), fn {_, player_pid} ->
-            Actors.Player.success_message(player_pid, msg)
+            Actors.Player.success_message(player_pid, message: msg)
           end)
 
           {:reply, {:ok, :user_opted_in, msg}, %{state | players: new_players}}
         else
           uuid = UUID.uuid4()
           {:ok, table_manager_pid} = Actors.NewTableManager.start_link(uuid, new_players)
+
+          # e.g. end_game_timer - reason = {:end_game_timer, uuid}
+          # Process.monitor(table_manager_pid)
 
           # Update state
           datetime = DateTime.utc_now()

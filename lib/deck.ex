@@ -108,6 +108,34 @@ defmodule Deck do
     end
   end
 
+  def get_a_random_valid_card(cards, turn_first_card) do
+    if turn_first_card do
+      card_left =
+        cards
+        |> Map.values()
+        |> Enum.filter(fn %{suit: s} -> turn_first_card[:suit] == s end)
+        |> Enum.filter(fn %{used: u} -> !u end)
+
+      if card_left != [] do
+        # If I still have some card of the suit, pick one of them randomly
+        card_left
+        |> Enum.random()
+      else
+        # Otherwise I pick a random unused card
+        cards
+        |> Map.values()
+        |> Enum.filter(fn %{used: u} -> !u end)
+        |> Enum.random()
+      end
+    else
+      # Picking a random unused card
+      cards
+      |> Map.values()
+      |> Enum.filter(fn %{used: u} -> !u end)
+      |> Enum.random()
+    end
+  end
+
   def shuffle_and_chunk_deck do
     case System.argv() do
       [] ->
