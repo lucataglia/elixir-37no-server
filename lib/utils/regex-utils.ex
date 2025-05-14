@@ -78,6 +78,12 @@ defmodule Utils.Regex do
       "s" ->
         {:share}
 
+      "auto share" ->
+        {:auto_share}
+
+      "as" ->
+        {:auto_share}
+
       "replay" ->
         {:replay}
 

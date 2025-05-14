@@ -332,7 +332,7 @@ defmodule Actors.Player do
 
   # STATE - END GAME
   @impl true
-  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
+  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, game_state: game_state, behavior: :end_game} = state) do
     case Utils.Regex.check_end_game_input(data) do
       {:share} ->
         case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
@@ -344,6 +344,14 @@ defmodule Actors.Player do
             warning_message(self(), Actors.Player.Messages.card_already_shared())
             {:noreply, state}
         end
+
+      {:auto_share} ->
+        cards = game_state[:players][name][:cards]
+
+        ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
+        info_message(self(), Actors.Player.Messages.my_cards_was(ordered_cards))
+
+        {:noreply, state}
 
       {:replay} ->
         Actors.NewTableManager.replay({:pid, table_manager_pid}, name)

@@ -106,9 +106,14 @@ defmodule MyApp.SocketTest do
     play_card(sock2, "js")
 
     share(sock1)
-    share(sock1)
+    auto_share(sock1)
+
     share(sock2)
+    auto_share(sock2)
+
     share(sock3)
+    auto_share(sock3)
+
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -166,9 +171,14 @@ defmodule MyApp.SocketTest do
     play_card(sock2, "js")
 
     share(sock1)
-    share(sock1)
+    auto_share(sock1)
+
     share(sock2)
+    auto_share(sock2)
+
     share(sock3)
+    auto_share(sock3)
+
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -226,9 +236,14 @@ defmodule MyApp.SocketTest do
     play_card(sock2, "js")
 
     share(sock1)
-    share(sock1)
+    auto_share(sock1)
+
     share(sock2)
+    auto_share(sock2)
+
     share(sock3)
+    auto_share(sock3)
+
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -286,9 +301,14 @@ defmodule MyApp.SocketTest do
     play_card(sock2, "js")
 
     share(sock1)
-    share(sock1)
+    auto_share(sock1)
+
     share(sock2)
+    auto_share(sock2)
+
     share(sock3)
+    auto_share(sock3)
+
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -348,6 +368,11 @@ defmodule MyApp.SocketTest do
 
   defp share(socket) do
     TCP.send(socket, "share\n")
+    Process.sleep(10)
+  end
+
+  defp auto_share(socket) do
+    TCP.send(socket, "auto share\n")
     Process.sleep(10)
   end
 
