@@ -2,6 +2,7 @@ defmodule Actors.GameManager do
   @moduledoc """
   Actors.GameManager
   """
+  alias Utils.Colors
 
   @gamemanager :gamemanager
   @player_opt_in :player_opt_in
@@ -30,6 +31,8 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@player_opt_in, name, pid}, _from, %{players: players} = state) do
+    log("#{name} opt_in")
+
     count = (players |> Map.keys() |> length) + 1
 
     case Map.has_key?(players, name) do
@@ -55,6 +58,8 @@ defmodule Actors.GameManager do
         else
           uuid = UUID.uuid4()
           {:ok, table_manager_pid} = Actors.NewTableManager.start_link(uuid, new_players)
+
+          log("Game #{uuid} is starting")
 
           # Update state
           datetime = DateTime.utc_now()
@@ -83,6 +88,8 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@player_opt_out, name}, _from, %{players: players} = state) do
+    log("#{name} opt_out")
+
     case Map.has_key?(players, name) do
       false ->
         {:reply, {:error, :user_not_registered}, state}
@@ -105,6 +112,8 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@list_open_tables, name}, _from, %{active_players: active_players} = state) do
+    log("#{name} list_open_tables")
+
     case active_players[name] do
       # list is [{game_uuid, game_desc}, ...]
       list when is_list(list) and list != [] ->
@@ -116,7 +125,9 @@ defmodule Actors.GameManager do
   end
 
   @impl true
-  def handle_call({@list_all_open_tables}, _from, %{active_games: active_games} = state) do
+  def handle_call({@list_all_open_tables}, from, %{active_games: active_games} = state) do
+    log("#{from} list_all_open_tables")
+
     list =
       Enum.to_list(active_games)
       |> Enum.map(fn {uuid, {_, game_desc}} -> {uuid, game_desc} end)
@@ -126,6 +137,8 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@rejoin, name, uuid, player_pid}, _from, %{active_games: active_games} = state) do
+    log("#{name} rejoin #{uuid}")
+
     case active_games[uuid] do
       {_, _} ->
         Actors.NewTableManager.player_rejoin({:uuid, uuid}, name, player_pid)
@@ -143,6 +156,8 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@observe, name, uuid, player_pid}, _from, %{active_games: active_games} = state) do
+    log("#{name} observe #{uuid}")
+
     case active_games[uuid] do
       {_, _} ->
         Actors.NewTableManager.player_observe({:uuid, uuid}, name, player_pid)
@@ -182,5 +197,10 @@ defmodule Actors.GameManager do
 
   def observe(name, uuid, player_pid) do
     GenServer.call(@gamemanager, {@observe, name, uuid, player_pid})
+  end
+
+  # *** private api
+  defp log(msg) do
+    IO.puts("#{Colors.with_cyan_bright("GameManager")} #{msg}")
   end
 end

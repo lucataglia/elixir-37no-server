@@ -4,6 +4,7 @@ defmodule Actors.NewTableManager do
   @moduledoc """
   Actor.NewTableManager
   """
+  alias Utils.Colors
 
   use GenServer
 
@@ -175,7 +176,7 @@ defmodule Actors.NewTableManager do
   # GAME
   @impl true
   def handle_cast({@choice, name, card}, %{current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
-    IO.puts("#{Utils.Colors.with_magenta("[#{name}]")} (Player) choice: #{card[:key]}")
+    log("#{name} choice: #{card[:key]}")
 
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
@@ -332,7 +333,6 @@ defmodule Actors.NewTableManager do
 
           # GAME NOT ENDED
           true ->
-            IO.puts("")
             # Tells who is the new dealer
             Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
               cond do
@@ -429,7 +429,7 @@ defmodule Actors.NewTableManager do
   defp handle_end_game({@replay, {name, clear_leaderboard}}, %{end_game: end_game, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :end_game} = state) do
     replay_names = end_game[:replay_names]
 
-    IO.puts("#{name} want to replay")
+    log("#{name} want to replay")
 
     players = game_state[:players]
     observers = game_state[:observers]
@@ -496,7 +496,7 @@ defmodule Actors.NewTableManager do
 
   @impl true
   def init(%{deck: deck, game_dealer_index: game_dealer_index, game_state: game_state} = initial_state) do
-    IO.puts("Table Manager init " <> inspect(self()))
+    log("Table Manager init " <> inspect(self()))
     players = game_state[:players]
 
     [p1, p2, p3] =
@@ -583,5 +583,10 @@ defmodule Actors.NewTableManager do
       {:uuid, uuid} -> GenServer.call({:global, uuid}, {@observer_leave, name})
       {:pid, pid} -> GenServer.call(pid, {@observer_leave, name})
     end
+  end
+
+  # *** private api
+  defp log(msg) do
+    IO.puts("#{Colors.with_yellow_bright("TableManager")} #{msg}")
   end
 end

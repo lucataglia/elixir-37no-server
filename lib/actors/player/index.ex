@@ -25,6 +25,7 @@ defmodule Actors.Player do
       parent_pid: parent_pid,
       table_manager_pid: nil,
       deck: Deck.factory(),
+      stash: nil,
       name: name,
       game_state: %{},
       game_uuid: nil
@@ -32,7 +33,7 @@ defmodule Actors.Player do
   end
 
   def start_link(client, name, parent_pid) do
-    IO.puts("Player start_link")
+    log(name, "start_link")
 
     GenServer.start_link(__MODULE__, init_state(client, name, parent_pid))
   end
@@ -42,11 +43,12 @@ defmodule Actors.Player do
   def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, table_manager_pid: table_manager_pid} = state) do
     case state[:behavior] do
       :init ->
-        IO.puts("#{Colors.with_magenta("[#{name}]")} (Player) Parent process stopped with reason: #{inspect(reason)}")
+        log(name, "Parent process stopped with reason: #{inspect(reason)}")
+
         {:stop, :normal, state}
 
       _ ->
-        IO.puts("#{Colors.with_magenta("[#{name}]")} (Player) Parent process stopped with reason: #{inspect(reason)} - #{Colors.with_underline("Informing the TableManager")}")
+        log(name, "Parent process stopped with reason: #{inspect(reason)} - #{Colors.with_underline("Informing the TableManager")}")
 
         Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, name)
 
@@ -140,7 +142,7 @@ defmodule Actors.Player do
         {@recv, data},
         %{game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
       ) do
-    IO.puts("#{Utils.Colors.with_green("[#{name}]")} (Player) recv: #{data}")
+    log(name, "recv: #{data}")
 
     case Utils.Regex.check_is_valid_card_key(data) do
       {:error, :invalid_input} ->
@@ -205,7 +207,7 @@ defmodule Actors.Player do
 
   @impl true
   def handle_cast({@end_game, game_state}, %{name: name, behavior: :dealer} = state) do
-    IO.puts("game_state[:there_is_a_looser]: " <> inspect(game_state[:there_is_a_looser]))
+    log(name, "game_state[:there_is_a_looser]: " <> inspect(game_state[:there_is_a_looser]))
 
     piggyback =
       if game_state[:there_is_a_looser] do
@@ -221,17 +223,90 @@ defmodule Actors.Player do
 
   # STATE - BETTER
   @impl true
-  def handle_cast({@recv, _}, %{behavior: :better} = state) do
-    warning_message(self(), Messages.wait_your_turn())
+  def handle_cast({@recv, data}, %{name: name, game_state: game_state, deck: deck, behavior: :better} = state) do
+    turn_first_card = game_state[:turn_first_card]
 
-    {:noreply, state}
+    new_state =
+      if turn_first_card == nil do
+        warning_message(self(), Messages.wait_your_turn())
+
+        state
+      else
+        case Utils.Regex.check_is_valid_card_key(data) do
+          {:error, :invalid_input} ->
+            piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+            info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+            state
+
+          :ok ->
+            turn_first_card = game_state[:turn_first_card]
+
+            cards = game_state[:players][name][:cards]
+            choice = deck[String.to_atom(data)]
+
+            if choice do
+              if Map.has_key?(cards, String.to_atom(data)) do
+                case Deck.check_card_is_valid(data, cards, turn_first_card) do
+                  :ok ->
+                    log(name, "stash: #{inspect(choice.key)}")
+
+                    info_message(self(), Actors.Player.Messages.card_stashed(choice.key))
+                    %{state | stash: choice.key}
+
+                  {:ok, :change_ranking} ->
+                    log(name, "stash: #{inspect(choice.key)}")
+
+                    info_message(self(), Actors.Player.Messages.card_stashed(choice.key))
+                    %{state | stash: choice.key}
+
+                  {:error, :wrong_suit} ->
+                    piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
+                    info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+                    state
+
+                  {:error, :card_already_used} ->
+                    piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
+                    info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+                    state
+
+                  {:error, :invalid_input} ->
+                    piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+                    info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+                    state
+                end
+              else
+                piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
+                info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+                state
+              end
+            else
+              piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+              info_message(self(), Messages.print_table(game_state, name, piggyback))
+
+              state
+            end
+        end
+      end
+
+    {:noreply, new_state}
   end
 
   @impl true
-  def handle_cast({@dealer, game_state}, %{name: n, behavior: :better} = state) do
+  def handle_cast({@dealer, game_state}, %{name: n, stash: s, behavior: :better} = state) do
     info_message(self(), Messages.print_table(game_state, n))
 
-    {:noreply, %{state | game_state: game_state, behavior: :dealer}}
+    if s do
+      log(n, "unstash: #{inspect(s)}")
+
+      GenServer.cast(self(), {@recv, s})
+    end
+
+    {:noreply, %{state | stash: nil, game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
@@ -304,8 +379,8 @@ defmodule Actors.Player do
 
   # DEGUB that march everything
   @impl true
-  def handle_cast({x, _}, state) do
-    IO.puts("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+  def handle_cast({x, _}, %{name: n} = state) do
+    log(n, "Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -313,9 +388,9 @@ defmodule Actors.Player do
   # - - -
 
   @impl true
-  def init(%{parent_pid: parent_pid} = initial_state) do
-    IO.puts("Actor.Player init" <> inspect(self()))
-    IO.puts("Actor.Player monitor" <> inspect(parent_pid))
+  def init(%{name: n, parent_pid: parent_pid} = initial_state) do
+    log(n, "Actor.Player init" <> inspect(self()))
+    log(n, "Actor.Player monitor" <> inspect(parent_pid))
 
     Process.monitor(parent_pid)
 
@@ -404,5 +479,10 @@ defmodule Actors.Player do
 
   def stop(pid) do
     GenServer.cast(pid, {:stop})
+  end
+
+  # *** private api
+  defp log(n, msg) do
+    IO.puts("#{Colors.with_magenta("Player")} #{Colors.with_underline(n)} #{msg}")
   end
 end
