@@ -13,6 +13,7 @@ defmodule Actors.NewTableManager do
   @player_rejoin :player_rejoin
   @player_observe :player_observe
   @replay :replay
+  @share :share
 
   defp init_state(raw_players),
     do: %{
@@ -26,8 +27,11 @@ defmodule Actors.NewTableManager do
       # Because the next game it must me (game_dealer_index + 1) % 3
       game_dealer_index: 0,
 
-      # User in STATE - REPLAY
-      want_to_replay: [],
+      # Used in end_game state
+      end_game: %{
+        replay_names: [],
+        share_names: []
+      },
 
       # %{
       #   turn_first_card: %{label, suit, pretty, ranking, point},
@@ -54,8 +58,11 @@ defmodule Actors.NewTableManager do
       # Because the next game it must me (game_dealer_index + 1) % 3
       game_dealer_index: game_dealer_index,
 
-      # User in STATE - REPLAY
-      want_to_replay: [],
+      # Used in end_game state
+      end_game: %{
+        replay_names: [],
+        share_names: []
+      },
 
       # %{
       #   turn_first_card: %{label, suit, pretty, ranking, point},
@@ -385,6 +392,31 @@ defmodule Actors.NewTableManager do
 
   # END GAME
   @impl true
+  def handle_call({@share, name}, _from, %{end_game: end_game, game_state: game_state, behavior: :end_game} = state) do
+    share_names = end_game[:share_names]
+    check = Enum.member?(share_names, name)
+
+    if check do
+      {:reply, {:error, :already_shared}, state}
+    else
+      players = game_state[:players]
+      cards = players[name][:cards]
+
+      players
+      |> Enum.to_list()
+      |> Enum.filter(fn {n, _} -> n != name end)
+      |> Enum.each(fn {_, %{pid: pid}} ->
+        Actors.Player.player_shared_cards(pid, Actors.NewTableManager.Messages.shared_cards(name, cards))
+      end)
+
+      new_share_names = [name | share_names]
+      new_state = %{state | end_game: %{end_game | share_names: new_share_names}}
+
+      {:reply, {:ok}, new_state}
+    end
+  end
+
+  @impl true
   def handle_cast({@replay, name}, %{behavior: :end_game, game_state: %{there_is_a_looser: false}} = state) do
     handle_end_game({@replay, {name, false}}, state)
   end
@@ -394,14 +426,16 @@ defmodule Actors.NewTableManager do
     handle_end_game({@replay, {name, true}}, state)
   end
 
-  defp handle_end_game({@replay, {name, clear_leaderboard}}, %{want_to_replay: want_to_replay, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :end_game} = state) do
+  defp handle_end_game({@replay, {name, clear_leaderboard}}, %{end_game: end_game, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :end_game} = state) do
+    replay_names = end_game[:replay_names]
+
     IO.puts("#{name} want to replay")
 
     players = game_state[:players]
     observers = game_state[:observers]
-    new_want_to_replay = [name | want_to_replay]
+    new_replay_names = [name | replay_names]
 
-    case length(new_want_to_replay) do
+    case length(new_replay_names) do
       3 ->
         deck = state[:deck]
 
@@ -448,15 +482,15 @@ defmodule Actors.NewTableManager do
 
       _ ->
         Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-          Actors.Player.info_message(p, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
+          Actors.Player.info_message(p, Actors.NewTableManager.Messages.wants_to_replay(new_replay_names))
         end)
 
         Enum.to_list(observers)
         |> Enum.each(fn {_, pid} ->
-          Actors.Player.info_message(pid, Actors.NewTableManager.Messages.wants_to_replay(new_want_to_replay))
+          Actors.Player.info_message(pid, Actors.NewTableManager.Messages.wants_to_replay(new_replay_names))
         end)
 
-        {:noreply, %{state | want_to_replay: new_want_to_replay}}
+        {:noreply, %{state | end_game: %{end_game | replay_names: new_replay_names}}}
     end
   end
 
@@ -513,6 +547,13 @@ defmodule Actors.NewTableManager do
     case mode do
       {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@replay, name})
       {:pid, pid} -> GenServer.cast(pid, {@replay, name})
+    end
+  end
+
+  def share(mode, name) do
+    case mode do
+      {:uuid, uuid} -> GenServer.call({:global, uuid}, {@share, name})
+      {:pid, pid} -> GenServer.call(pid, {@share, name})
     end
   end
 

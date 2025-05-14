@@ -311,31 +311,7 @@ defmodule Messages do
 
     # CARDS
 
-    {_, my_cards} =
-      me[:cards]
-      |> Enum.to_list()
-      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, card} ->
-        new_p =
-          case card do
-            %{used: true} -> String.pad_trailing("", 2)
-            %{used: false, pretty: p} -> String.pad_trailing(p, 2)
-            %{pretty: p} -> String.pad_trailing(p, 2)
-            _ -> ""
-          end
-
-        {new_p, card[:suit]}
-      end)
-      |> Enum.reduce(
-        {"hearts", ""},
-        fn {p, s}, {prev, acc} ->
-          if s == prev do
-            {s, "#{acc}#{p} "}
-          else
-            {s, "#{acc}     #{p} "}
-          end
-        end
-      )
+    my_cards = Deck.print_card_in_order(me[:cards])
 
     # STACK
     p1s =

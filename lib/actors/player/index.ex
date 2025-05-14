@@ -259,6 +259,17 @@ defmodule Actors.Player do
   @impl true
   def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
     case Utils.Regex.check_end_game_input(data) do
+      {:share} ->
+        case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
+          {:ok} ->
+            info_message(self(), Actors.Player.Messages.card_shared())
+            {:noreply, state}
+
+          {:error, :already_shared} ->
+            warning_message(self(), Actors.Player.Messages.card_already_shared())
+            {:noreply, state}
+        end
+
       {:replay} ->
         Actors.NewTableManager.replay({:pid, table_manager_pid}, name)
         {:noreply, %{state | behavior: :ready_to_replay}}
@@ -385,6 +396,10 @@ defmodule Actors.Player do
     } = args
 
     GenServer.cast(pid, {@end_game, new_game_state})
+  end
+
+  def player_shared_cards(pid, msg) do
+    info_message(pid, msg)
   end
 
   def stop(pid) do

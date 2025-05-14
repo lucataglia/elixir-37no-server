@@ -19,4 +19,11 @@ defmodule Actors.NewTableManager.Messages do
       _ -> "#{IO.ANSI.format([:cyan, Enum.join(names, " and ")])} are ready to play again"
     end
   end
+
+  def shared_cards(name, cards) do
+    ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
+
+    "#{name} shared his cards:\n" <>
+      ordered_cards
+  end
 end

@@ -121,4 +121,63 @@ defmodule Deck do
         Utils.TestAware.chunked_deck()
     end
   end
+
+  def print_card_in_order(cards, opts \\ []) do
+    print_also_used_cards = Keyword.get(opts, :print_also_used_cards, false)
+    print_also_high_cards_count = Keyword.get(opts, :print_also_high_cards_count, false)
+
+    high_card_number =
+      if print_also_high_cards_count do
+        cards
+        |> Map.values()
+        |> Enum.count(fn card ->
+          String.at(card.key, 0) in ["3", "2", "a"]
+        end)
+      else
+        ""
+      end
+
+    {_, ordered_cards} =
+      cards
+      |> Enum.to_list()
+      |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
+      |> Enum.map(fn {_, card} ->
+        new_p =
+          case card do
+            %{used: true, pretty: p} ->
+              if print_also_used_cards do
+                String.pad_trailing(p, 2)
+              else
+                String.pad_trailing("", 2)
+              end
+
+            %{used: false, pretty: p} ->
+              String.pad_trailing(p, 2)
+
+            %{pretty: p} ->
+              String.pad_trailing(p, 2)
+
+            _ ->
+              ""
+          end
+
+        {new_p, card[:suit]}
+      end)
+      |> Enum.reduce(
+        {"hearts", ""},
+        fn {p, s}, {prev, acc} ->
+          if s == prev do
+            {s, "#{acc}#{p} "}
+          else
+            {s, "#{acc}     #{p} "}
+          end
+        end
+      )
+
+    if print_also_high_cards_count do
+      "#{ordered_cards}  - High cards: #{high_card_number}"
+    else
+      ordered_cards
+    end
+  end
 end

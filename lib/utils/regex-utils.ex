@@ -72,10 +72,16 @@ defmodule Utils.Regex do
 
   def check_end_game_input(recv) do
     case String.downcase(recv) do
+      "share" ->
+        {:share}
+
+      "s" ->
+        {:share}
+
       "replay" ->
         {:replay}
 
-      "re" ->
+      "r" ->
         {:replay}
 
       _ ->

@@ -28,9 +28,9 @@ defmodule MyApp.SocketTest do
     {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
-    pid = spawn_link(fn -> loop(sock3) end)
+    pid = spawn_link(fn -> loop(sock1) end)
 
-    TCP.controlling_process(sock3, pid)
+    TCP.controlling_process(sock1, pid)
 
     login_action(sock1)
     login_action(sock2)
@@ -105,6 +105,10 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "6h")
     play_card(sock2, "js")
 
+    share(sock1)
+    share(sock1)
+    share(sock2)
+    share(sock3)
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -161,6 +165,10 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "6h")
     play_card(sock2, "js")
 
+    share(sock1)
+    share(sock1)
+    share(sock2)
+    share(sock3)
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -217,6 +225,10 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "6h")
     play_card(sock2, "js")
 
+    share(sock1)
+    share(sock1)
+    share(sock2)
+    share(sock3)
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -273,6 +285,10 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "6h")
     play_card(sock2, "js")
 
+    share(sock1)
+    share(sock1)
+    share(sock2)
+    share(sock3)
     replay(sock1)
     replay(sock2)
     replay(sock3)
@@ -317,17 +333,22 @@ defmodule MyApp.SocketTest do
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(100)
+    Process.sleep(10)
   end
 
   defp replay(socket) do
     TCP.send(socket, "replay\n")
-    Process.sleep(100)
+    Process.sleep(10)
+  end
+
+  defp share(socket) do
+    TCP.send(socket, "share\n")
+    Process.sleep(10)
   end
 
   defp exit_fn(socket) do
     TCP.send(socket, "exit\n")
-    Process.sleep(100)
+    Process.sleep(10)
   end
 
   defp assert_response(socket, expected) do
