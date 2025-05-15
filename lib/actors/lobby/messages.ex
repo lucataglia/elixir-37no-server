@@ -23,7 +23,7 @@ defmodule Actors.Lobby.Messages do
         _ -> ""
       end
 
-    Actors.Stats.PrintUtils.pretty_print_stats(stats) <>
+    Actors.Stats.PrintUtils.pretty_print_stats(name, stats) <>
       "\n\n\n" <>
       Messages.print_summary_table() <>
       "\n\n\n" <>

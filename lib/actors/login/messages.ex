@@ -7,6 +7,11 @@ defmodule Actors.Login.Messages do
     "Invalid input #{Utils.Colors.with_underline(data)}\n"
   end
 
+  def menu_invalid_input_back(data) do
+    "Invalid input #{Utils.Colors.with_underline(data)}.\n" <>
+      "Type #{Utils.Colors.with_underline("exit")} to exit the game.\n"
+  end
+
   def menu do
     "#{Utils.Colors.with_yellow("WELCOME")}" <>
       """

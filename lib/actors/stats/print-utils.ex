@@ -16,7 +16,7 @@ defmodule Actors.Stats.PrintUtils do
     str <> String.duplicate(" ", padding)
   end
 
-  def pretty_print_stats(stats_map) when is_map(stats_map) do
+  def pretty_print_stats(name, stats_map) when is_map(stats_map) do
     rows =
       stats_map
       |> Enum.map(fn {k, v} ->
@@ -25,7 +25,7 @@ defmodule Actors.Stats.PrintUtils do
          |> String.capitalize(), to_string(v)}
       end)
 
-    header = {Colors.with_green("Stats"), ""}
+    header = {Colors.with_green("Stats"), Colors.with_light_green(name)}
 
     key_width =
       Enum.map(rows, fn {k, _} -> visible_length(k) end)
@@ -35,6 +35,7 @@ defmodule Actors.Stats.PrintUtils do
     val_width =
       Enum.map(rows, fn {_, v} -> visible_length(v) end)
       |> Enum.max(fn -> 5 end)
+      |> max(visible_length(elem(header, 1)))
 
     format_row = fn {key, val} ->
       "| " <>

@@ -16,8 +16,9 @@ defmodule Actors.NewTableManager do
   @replay :replay
   @share :share
 
-  defp init_state(raw_players),
+  defp init_state(uuid, raw_players),
     do: %{
+      uuid: uuid,
       behavior: :game,
       deck: Deck.shuffle_and_chunk_deck(),
       # %{
@@ -47,8 +48,9 @@ defmodule Actors.NewTableManager do
       game_state: %{prev_turn: [], turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
     }
 
-  defp end_game_init_state(there_is_a_looser, game_dealer_index, players, observers),
+  defp end_game_init_state(uuid, there_is_a_looser, game_dealer_index, players, observers),
     do: %{
+      uuid: uuid,
       behavior: :end_game,
       deck: Deck.shuffle_and_chunk_deck(),
       # %{
@@ -88,26 +90,39 @@ defmodule Actors.NewTableManager do
       }
     }
 
+  def start(uuid, raw_players) do
+    GenServer.start(__MODULE__, init_state(uuid, raw_players), name: {:global, uuid})
+  end
+
   def start_link(uuid, raw_players) do
-    GenServer.start_link(__MODULE__, init_state(raw_players), name: {:global, uuid})
+    GenServer.start_link(__MODULE__, init_state(uuid, raw_players), name: {:global, uuid})
   end
 
   # LEFT THE GAME
-  def handle_cast({@player_left_the_game, name}, %{game_state: game_state} = state) do
+  def handle_cast({@player_left_the_game, name}, %{uuid: uuid, game_state: game_state} = state) do
+    log("#{name} left the game #{uuid}")
+
     players = game_state[:players]
     new_player = %{players[name] | is_stopped: true}
-    new_game_state = %{game_state | players: Map.put(players, name, new_player)}
+    new_players = Map.put(players, name, new_player)
 
-    # Tells who is the new dealer
-    Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
-      Actors.Player.game_state_update(
-        p,
-        %{new_game_state: new_game_state},
-        Actors.NewTableManager.Messages.player_left_the_game(name)
-      )
-    end)
+    count = new_players |> Enum.count(fn {_name, %{is_stopped: s}} -> s end)
 
-    {:noreply, %{state | game_state: new_game_state}}
+    if count == 3 do
+      {:stop, {:shutdown, {:table_manager_shutdown_game_ended, uuid}}, state}
+    else
+      new_game_state = %{game_state | players: new_players}
+
+      Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
+        Actors.Player.game_state_update(
+          p,
+          %{new_game_state: new_game_state},
+          Actors.NewTableManager.Messages.player_left_the_game(name)
+        )
+      end)
+
+      {:noreply, %{state | game_state: new_game_state}}
+    end
   end
 
   # REJOIN
@@ -175,7 +190,7 @@ defmodule Actors.NewTableManager do
 
   # GAME
   @impl true
-  def handle_cast({@choice, name, card}, %{current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
+  def handle_cast({@choice, name, card}, %{uuid: uuid, current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
     log("#{name} choice: #{card[:key]}")
 
     dealer_index = game_state[:dealer_index]
@@ -323,14 +338,14 @@ defmodule Actors.NewTableManager do
                 |> Enum.to_list()
                 |> Enum.each(fn {n, _} -> Actors.Stats.record_game(n, new_players_with_leaderboard) end)
 
-                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state = end_game_init_state(uuid, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
 
               false ->
                 new_game_dealer_index = rem(game_dealer_index + 1, 3)
-                end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state = end_game_init_state(uuid, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}

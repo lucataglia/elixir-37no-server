@@ -12,6 +12,10 @@ defmodule Actors.Stats do
   @get_stats :get_stats
 
   # Client API
+  def start() do
+    GenServer.start(__MODULE__, nil, name: __MODULE__)
+  end
+
   def start_link() do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end

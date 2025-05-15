@@ -29,6 +29,18 @@ defmodule Actors.GameManager do
     GenServer.start_link(__MODULE__, init_state, name: @gamemanager)
   end
 
+  # HANDLE INFO
+  @impl true
+  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_game_ended, uuid}} = reason}, %{active_games: active_games} = state) do
+    log(":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
+
+    new_active_games = Map.delete(active_games, uuid)
+
+    {:noreply, %{state | active_games: new_active_games}}
+  end
+
+  # *** END HANDLE INFO
+
   @impl true
   def handle_call({@player_opt_in, name, pid}, _from, %{players: players} = state) do
     log("#{name} opt_in")
@@ -57,7 +69,8 @@ defmodule Actors.GameManager do
           {:reply, {:ok, :user_opted_in, msg}, %{state | players: new_players}}
         else
           uuid = UUID.uuid4()
-          {:ok, table_manager_pid} = Actors.NewTableManager.start_link(uuid, new_players)
+          {:ok, table_manager_pid} = Actors.NewTableManager.start(uuid, new_players)
+          Process.monitor(table_manager_pid)
 
           log("Game #{uuid} is starting")
 

@@ -26,6 +26,10 @@ defmodule Utils.Colors do
     IO.ANSI.format([:cyan, str])
   end
 
+  def with_light_cyan(str) do
+    IO.ANSI.format([:light_cyan, str])
+  end
+
   def with_cyan_bright(str) do
     IO.ANSI.format([:cyan, :bright, str])
   end
@@ -34,8 +38,16 @@ defmodule Utils.Colors do
     "#{IO.ANSI.format([:green, str])}"
   end
 
+  def with_light_green(str) do
+    "#{IO.ANSI.format([:light_green, str])}"
+  end
+
   def with_magenta(str) do
     "#{IO.ANSI.format([:magenta, str])}"
+  end
+
+  def with_light_magenta(str) do
+    "#{IO.ANSI.format([:light_magenta, str])}"
   end
 
   def with_red_bright(str) do

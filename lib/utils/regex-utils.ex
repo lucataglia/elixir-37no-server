@@ -78,17 +78,24 @@ defmodule Utils.Regex do
       "s" ->
         {:share}
 
-      "auto share" ->
-        {:auto_share}
-
-      "as" ->
-        {:auto_share}
-
       "replay" ->
         {:replay}
 
       "r" ->
         {:replay}
+
+      _ ->
+        {:error, :invalid_input}
+    end
+  end
+
+  def check_end_game_input_ready_to_replay(recv) do
+    case String.downcase(recv) do
+      "share" ->
+        {:share}
+
+      "s" ->
+        {:share}
 
       _ ->
         {:error, :invalid_input}

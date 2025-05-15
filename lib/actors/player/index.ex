@@ -18,11 +18,11 @@ defmodule Actors.Player do
   @rejoin_success :rejoin_success
   @start_game :start_game
 
-  defp init_state(client, name, parent_pid) do
+  defp init_state(client, name, lobby_pid) do
     %{
       behavior: :init,
       client: client,
-      parent_pid: parent_pid,
+      lobby_pid: lobby_pid,
       table_manager_pid: nil,
       deck: Deck.factory(),
       stash: nil,
@@ -32,31 +32,46 @@ defmodule Actors.Player do
     }
   end
 
-  def start_link(client, name, parent_pid) do
-    log(name, "start_link")
+  def start(client, name, lobby_pid) do
+    log(name, "start")
 
-    GenServer.start_link(__MODULE__, init_state(client, name, parent_pid))
+    GenServer.start(__MODULE__, init_state(client, name, lobby_pid))
   end
 
-  # Handle :DOWN message when the parent dies
-  @impl true
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, %{name: name, table_manager_pid: table_manager_pid} = state) do
-    case state[:behavior] do
-      :init ->
-        log(name, "Parent process stopped with reason: #{inspect(reason)}")
+  def start_link(client, name, lobby_pid) do
+    log(name, "start_link")
 
-        {:stop, :normal, state}
+    GenServer.start_link(__MODULE__, init_state(client, name, lobby_pid))
+  end
+
+  # HANDLE INFO
+  @impl true
+  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :bridge_shutdown_client_exit} = reason}, %{name: name, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
+    log(name, ":DOWN Lobby #{inspect(pid)} exited with reason #{inspect(reason)}")
+
+    case behavior do
+      :init ->
+        log(name, "behavior #{behavior} - do nothing")
+
+        {:stop, reason, state}
 
       _ ->
-        log(name, "Parent process stopped with reason: #{inspect(reason)} - #{Colors.with_underline("Informing the TableManager")}")
+        log(name, "behavior #{behavior} - NewTableManager.player_left_the_game")
 
         Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, name)
 
-        {:stop, :normal, state}
+        {:stop, reason, state}
     end
+
+    {:stop, reason, state}
   end
 
-  # *** # Handle :DOWN message when the parent dies
+  # @impl true
+  # def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
+  #   log("CIAO", ":DOWN Lobby #{inspect(pid)} exited with reason #{inspect(reason)}")
+
+  #   {:stop, reason, state}
+  # end
 
   # PRINT MESSAGES
   @impl true
@@ -98,8 +113,8 @@ defmodule Actors.Player do
 
   # JOIN AS OBSERVER
   @impl true
-  def handle_cast({@observer, new_game_state, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
-    Actors.Lobby.game_start(parent_pid)
+  def handle_cast({@observer, new_game_state, piggiback}, %{name: n, lobby_pid: lobby_pid} = state) do
+    Actors.Lobby.game_start(lobby_pid)
 
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
@@ -108,8 +123,12 @@ defmodule Actors.Player do
 
   # REJOIN SUCCESS - as dealer
   @impl true
-  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
-    Actors.Lobby.game_start(parent_pid)
+  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, lobby_pid: lobby_pid} = state) do
+    log(n, "Rejoin success as dealer")
+    Actors.Lobby.game_start(lobby_pid)
+
+    log(n, "monitor" <> inspect(table_manager_pid))
+    Process.monitor(table_manager_pid)
 
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
@@ -118,18 +137,35 @@ defmodule Actors.Player do
 
   # REJOIN SUCCESS - as better
   @impl true
-  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, parent_pid: parent_pid} = state) do
-    Actors.Lobby.game_start(parent_pid)
+  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, lobby_pid: lobby_pid} = state) do
+    log(n, "Rejoin success as better")
+    Actors.Lobby.game_start(lobby_pid)
+
+    log(n, "monitor" <> inspect(table_manager_pid))
+    Process.monitor(table_manager_pid)
 
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
     {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :better}}
   end
 
+  @impl true
+  def handle_cast({@recv, "back"}, %{name: n, table_manager_pid: table_manager_pid} = state) do
+    log(n, "back")
+
+    Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, n)
+
+    {:stop, {:shutdown, :player_shutdown_left_the_game}, state}
+  end
+
   # STATE - INIT (behavior is :dealer or :better)
   @impl true
-  def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, parent_pid: parent_pid} = state) do
-    Actors.Lobby.game_start(parent_pid)
+  def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, lobby_pid: lobby_pid} = state) do
+    log(n, "Start game " <> inspect(behavior))
+    Actors.Lobby.game_start(lobby_pid)
+
+    log(n, "monitor" <> inspect(table_manager_pid))
+    Process.monitor(table_manager_pid)
 
     info_message(self(), Messages.print_table(game_state, n, Actors.Player.Messages.good_luck()))
 
@@ -338,20 +374,18 @@ defmodule Actors.Player do
         case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
           {:ok} ->
             info_message(self(), Actors.Player.Messages.card_shared())
+
+            cards = game_state[:players][name][:cards]
+
+            ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
+            info_message(self(), Actors.Player.Messages.my_cards_was(ordered_cards))
+
             {:noreply, state}
 
           {:error, :already_shared} ->
             warning_message(self(), Actors.Player.Messages.card_already_shared())
             {:noreply, state}
         end
-
-      {:auto_share} ->
-        cards = game_state[:players][name][:cards]
-
-        ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
-        info_message(self(), Actors.Player.Messages.my_cards_was(ordered_cards))
-
-        {:noreply, state}
 
       {:replay} ->
         Actors.NewTableManager.replay({:pid, table_manager_pid}, name)
@@ -365,8 +399,29 @@ defmodule Actors.Player do
 
   # STATE - READY TO REPLY
   @impl true
-  def handle_cast({@recv, _}, %{behavior: :ready_to_replay} = state) do
-    warning_message(self(), Messages.ready_to_replay_invalid_input())
+  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, game_state: game_state, behavior: :ready_to_replay} = state) do
+    case Utils.Regex.check_end_game_input_ready_to_replay(data) do
+      {:share} ->
+        case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
+          {:ok} ->
+            info_message(self(), Actors.Player.Messages.card_shared())
+
+            cards = game_state[:players][name][:cards]
+
+            ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
+            info_message(self(), Actors.Player.Messages.my_cards_was(ordered_cards))
+
+            {:noreply, state}
+
+          {:error, :already_shared} ->
+            warning_message(self(), Actors.Player.Messages.card_already_shared())
+            {:noreply, state}
+        end
+
+      {:error, :invalid_input} ->
+        warning_message(self(), Messages.end_game_invalid_input())
+        {:noreply, state}
+    end
 
     {:noreply, state}
   end
@@ -396,11 +451,11 @@ defmodule Actors.Player do
   # - - -
 
   @impl true
-  def init(%{name: n, parent_pid: parent_pid} = initial_state) do
+  def init(%{name: n, lobby_pid: lobby_pid} = initial_state) do
     log(n, "Actor.Player init" <> inspect(self()))
-    log(n, "Actor.Player monitor" <> inspect(parent_pid))
+    log(n, "Actor.Player monitor" <> inspect(lobby_pid))
 
-    Process.monitor(parent_pid)
+    Process.monitor(lobby_pid)
 
     {:ok, initial_state}
   end
@@ -491,6 +546,6 @@ defmodule Actors.Player do
 
   # *** private api
   defp log(n, msg) do
-    IO.puts("#{Colors.with_magenta("Player")} #{Colors.with_underline(n)} #{msg}")
+    IO.puts("#{Colors.with_light_magenta("Player")} #{Colors.with_underline(n)} #{msg}")
   end
 end

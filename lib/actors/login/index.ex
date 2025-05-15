@@ -2,29 +2,36 @@ defmodule Actors.Login do
   @moduledoc """
   Actors.Login
   """
+  alias Utils.Colors
 
   use GenServer
 
-  defp init_state() do
+  defp init_state(bridge_pid) do
     %{
       behavior: :menu,
       client: nil,
-      parent_pid: nil
+      bridge_pid: bridge_pid
     }
   end
 
-  def start_link(client, parent_pid) do
-    IO.puts("Actor.Login start_link [caller pid]" <> inspect(self()))
+  def start(client, bridge_pid) do
+    log("Actor.Login start [caller pid]" <> inspect(self()))
 
-    GenServer.start_link(__MODULE__, %{init_state() | client: client, parent_pid: parent_pid})
+    GenServer.start(__MODULE__, %{init_state(bridge_pid) | client: client})
   end
 
-  # Handle :DOWN message when the parent dies
-  @impl true
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
-    IO.puts("(Login) Parent process stopped with reason: #{inspect(reason)}")
+  def start_link(client, bridge_pid) do
+    log("Actor.Login start_link [caller pid]" <> inspect(self()))
 
-    {:stop, :normal, state}
+    GenServer.start_link(__MODULE__, %{init_state(bridge_pid) | client: client})
+  end
+
+  # HANDLE INFO
+  @impl true
+  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :bridge_shutdown_client_exit} = reason}, state) do
+    log("Bridge #{inspect(pid)} exited with reason #{inspect(reason)}")
+
+    {:stop, reason, state}
   end
 
   # PRINT MESSAGES
@@ -64,6 +71,14 @@ defmodule Actors.Login do
         GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}"})
         {:reply, {:ok, :goto_sign_up}, %{state | behavior: :sign_up}}
 
+      {:error, :invalid_input_back} ->
+        GenServer.cast(
+          self(),
+          {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}\n\n", "#{Actors.Login.Messages.menu_invalid_input_back(data)}"}
+        )
+
+        {:reply, {:error, :invalid_credentials}, state}
+
       {:error, :invalid_input} ->
         GenServer.cast(
           self(),
@@ -85,7 +100,7 @@ defmodule Actors.Login do
       {:ok, name, password} ->
         case :ets.lookup(:users, name) do
           [{^name, ^password}] ->
-            IO.puts("Login successful for user #{name}.")
+            log("Login successful for user #{name}.")
 
             {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
@@ -132,7 +147,7 @@ defmodule Actors.Login do
             # TODO: hashing the password before writing
             :ets.insert(:users, {name, password})
 
-            IO.puts("User #{name} signed up successfully.")
+            log("User #{name} signed up successfully.")
 
             {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
@@ -157,8 +172,9 @@ defmodule Actors.Login do
   end
 
   # DEGUB that march everything
+  @impl true
   def handle_cast({x, _}, state) do
-    IO.puts("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    log("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -166,14 +182,17 @@ defmodule Actors.Login do
   # - - -
 
   @impl true
-  def init(%{parent_pid: parent_pid} = initial_state) do
-    IO.puts("Actor.Login init" <> inspect(self()))
-    IO.puts("Actor.Login monitor" <> inspect(parent_pid))
+  def init(%{bridge_pid: bridge_pid} = initial_state) do
+    log("Actor.Login init" <> inspect(self()))
 
-    Process.monitor(parent_pid)
+    Process.monitor(bridge_pid)
 
     GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}"})
 
     {:ok, initial_state}
+  end
+
+  defp log(msg) do
+    IO.puts("#{Colors.with_light_cyan("Login")} #{msg}")
   end
 end

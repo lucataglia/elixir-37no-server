@@ -29,6 +29,7 @@ defmodule Actors.Lobby.Regex do
           "ot" -> {:ok, :list_my_open_tables}
           "play" -> {:ok, :opt_in}
           "p" -> {:ok, :opt_in}
+          "back" -> {:ok, :back}
           _ -> {:error, :invalid_input}
         end
     end

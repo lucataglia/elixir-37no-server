@@ -1,2 +1,5 @@
-1. there_is_a_looser must be put into the game_state because the players Actor has to manage a different UI message
-if a complete new game has to start
+Implement where a table ends because everybody quit or because noone wants to play again.
+When a table end the TableManager {:stop, {:shutdown, {:table_manager_shutdown_game_ended, uuid}}}
+so the GameManager that is monitoring him can clear the uuid from the active tables.
+
+Check that the players that left the table aren't still recieve the messages from the TableManager
