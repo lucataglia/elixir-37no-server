@@ -5,8 +5,9 @@ defmodule SimpleServer do
 
   def start(_, [port]) do
     {:ok, socket} =
-      :gen_tcp.listen(port, [:binary, packet: :line, active: false, ip: {0,0,0,0}, reuseaddr: true])
+      :gen_tcp.listen(port, [:binary, packet: :line, active: false, ip: {0, 0, 0, 0}, reuseaddr: true])
 
+    Actors.Stats.start_link()
     Actors.GameManager.start_link()
 
     # CREATE TABLES

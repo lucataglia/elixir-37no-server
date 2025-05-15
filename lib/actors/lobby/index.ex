@@ -100,7 +100,7 @@ defmodule Actors.Lobby do
       {:ok, :opt_in} ->
         case Actors.GameManager.add_player(name, player_actor) do
           {:error, :user_already_registered} ->
-            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: Actors.Lobby.Messages.user_already_opted_in(name))
+            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: Actors.Lobby.Messages.user_already_opted_in(name))
 
             {:noreply, state}
 
@@ -116,13 +116,13 @@ defmodule Actors.Lobby do
       {:ok, :list_my_open_tables} ->
         case Actors.GameManager.list_open_tables(name) do
           {:ok, :no_active_game} ->
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: "You have zero game in progess")
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: "You have zero game in progess")
 
             {:noreply, state}
 
           {:ok, list} ->
             msg = Enum.map(list, fn {game_uuid, game_desc} -> "#{Colors.with_underline("rejoin #{game_uuid}")} - #{game_desc}" end)
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: msg)
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: msg)
 
             {:noreply, state}
         end
@@ -130,13 +130,13 @@ defmodule Actors.Lobby do
       {:ok, :list_all_open_tables} ->
         case Actors.GameManager.list_all_open_tables() do
           {:ok, list} when list == [] ->
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: "There are zero games in progess")
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: "There are zero games in progess")
 
             {:noreply, state}
 
           {:ok, list} ->
             msg = Enum.map(list, fn {game_uuid, game_desc} -> "#{Colors.with_underline("observe #{game_uuid}")} - #{game_desc}" end)
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: msg)
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: msg)
 
             {:noreply, state}
         end
@@ -144,13 +144,13 @@ defmodule Actors.Lobby do
       {:ok, :rejoin, uuid} ->
         case Actors.GameManager.rejoin(name, uuid, player_actor) do
           {:ok, :table_manager_informed} ->
-            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: "Please wait...")
+            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: "Please wait...")
 
             {:noreply, state}
 
           {:error, :game_does_not_exist} ->
             warning_message(self(),
-              message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n",
+              message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
               piggiback: "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."
             )
 
@@ -161,7 +161,7 @@ defmodule Actors.Lobby do
         case Actors.GameManager.observe(name, uuid, player_actor) do
           {:ok, :table_manager_informed} ->
             warning_message(self(),
-              message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n",
+              message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
               piggiback: "Please wait..."
             )
 
@@ -169,7 +169,7 @@ defmodule Actors.Lobby do
 
           {:error, :game_does_not_exist} ->
             warning_message(self(),
-              message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n",
+              message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
               piggiback: "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."
             )
 
@@ -180,7 +180,7 @@ defmodule Actors.Lobby do
 
       {:error, :invalid_input} ->
         warning_message(self(),
-          message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n",
+          message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
           piggiback: Actors.Lobby.Messages.invalid_input_lobby(data)
         )
 
@@ -203,7 +203,7 @@ defmodule Actors.Lobby do
             {:noreply, state}
 
           {:ok, msg} ->
-            success_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}\n\n", piggiback: msg)
+            success_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: msg)
 
             {:noreply, %{state | behavior: @behavior_lobby}}
         end
@@ -263,7 +263,7 @@ defmodule Actors.Lobby do
 
     {:ok, pid} = Actors.Player.start_link(client, name, self())
 
-    info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby()}")
+    info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}")
 
     {:ok, %{initial_state | player_actor: pid}}
   end

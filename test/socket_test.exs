@@ -39,9 +39,9 @@ defmodule MyApp.SocketTest do
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
-    create_user(sock1, "Jeff")
-    create_user(sock2, "Joebastian")
-    create_user(sock3, "TheFendent")
+    create_user(sock1, "testjeff")
+    create_user(sock2, "testjoebas")
+    create_user(sock3, "testThe")
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)

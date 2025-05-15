@@ -15,19 +15,28 @@ defmodule Actors.Lobby.Messages do
     "A user name with name #{Utils.Colors.with_underline(name)} already opted in for that game"
   end
 
-  def lobby do
-    Messages.print_summary_table() <>
-      "\n\n\n\n" <>
+  def lobby(name) do
+    stats =
+      case Actors.Stats.get_stats(name) do
+        {:ok, s} -> s
+        # this should never happen
+        _ -> ""
+      end
+
+    Actors.Stats.PrintUtils.pretty_print_stats(stats) <>
+      "\n\n\n" <>
+      Messages.print_summary_table() <>
+      "\n\n\n" <>
       Messages.recap_sentence() <>
-      "\n\n\n\n" <>
+      "\n\n\n" <>
       "#{Utils.Colors.with_green("LOBBY")}" <> "\n" <> "Type #{Utils.Colors.with_underline("play")} to opt_in to a game\n"
   end
 
   def opted_in do
     Messages.print_summary_table() <>
-      "\n\n\n\n" <>
+      "\n\n\n" <>
       Messages.recap_sentence() <>
-      "\n\n\n\n" <>
+      "\n\n\n" <>
       "#{Utils.Colors.with_green("OPTED IN")}" <> "\n" <> "Type #{Utils.Colors.with_underline("back")} to opt_out the game\n"
   end
 

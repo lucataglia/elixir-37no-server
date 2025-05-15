@@ -318,6 +318,11 @@ defmodule Actors.NewTableManager do
                     _ -> dealer_index
                   end
 
+                # Record STATS
+                new_players_with_leaderboard
+                |> Enum.to_list()
+                |> Enum.each(fn {n, _} -> Actors.Stats.record_game(n, new_players_with_leaderboard) end)
+
                 end_game_state = end_game_init_state(there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN

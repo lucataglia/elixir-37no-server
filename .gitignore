@@ -25,3 +25,6 @@ elixir_37no_server-*.tar
 .idea/
 elixir_37no_server.iml
 .DS_Store
+
+# DB
+user_stats.json
