@@ -17,13 +17,13 @@ defmodule Actors.Lobby.Messages do
 
   def lobby(name) do
     stats =
-      case Actors.Stats.get_stats(name) do
+      case Actors.Persistence.Stats.get_stats(name) do
         {:ok, s} -> s
         # this should never happen
         _ -> ""
       end
 
-    Actors.Stats.PrintUtils.pretty_print_stats(name, stats) <>
+    Actors.Persistence.Stats.PrintUtils.pretty_print_stats(name, stats) <>
       "\n\n\n" <>
       Messages.print_summary_table() <>
       "\n\n\n" <>

@@ -31,7 +31,9 @@ defmodule Elixir37noServer.MixProject do
   defp deps do
     [
       {:argon2_elixir, "~> 2.0"},
+      {:bcrypt_elixir, "~> 3.3"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:decimal, "~> 2.3.0"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ucwidth, "~> 0.1.0"},
       {:uuid, "~> 1.1"}

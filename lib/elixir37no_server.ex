@@ -5,24 +5,23 @@ defmodule SimpleServer do
 
   def start(_, [port]) do
     {:ok, socket} =
-      :gen_tcp.listen(port, [:binary, packet: :line, active: false, ip: {0, 0, 0, 0}, reuseaddr: true])
+      :gen_tcp.listen(port, [:binary, packet: :line, active: false, ip: {0, 0, 0, 0}, reuseaddr: true, keepalive: true])
 
-    Actors.Stats.start()
+    Actors.Persistence.Auth.start_link()
+    Actors.Persistence.Stats.start_link()
     Actors.GameManager.start_link()
 
-    # CREATE TABLES
-    :ets.new(:users, [:set, :public, :named_table])
-    IO.puts("ETS table :users created.")
-    # END CREATE TABLES
-
-    IO.puts("Server listening on port #{port}")
+    IO.puts("SimpleServer: Server listening on port #{port}")
     accept_connections(socket)
   end
 
   defp accept_connections(socket) do
     {:ok, client} = :gen_tcp.accept(socket)
 
-    IO.puts("Client connected")
+    # Enable keepalive on accepted client socket
+    :ok = :inet.setopts(client, keepalive: true)
+
+    IO.puts("SimpleServer: Client connected")
 
     {:ok, pid} = Actors.Bridge.start_link(client)
     spawn(fn -> handle_client(client, pid) end)
@@ -38,7 +37,7 @@ defmodule SimpleServer do
         |> String.downcase()
         |> (fn
               "exit" ->
-                IO.puts("Close the client")
+                IO.puts("SimpleServer: Close the client - exit")
 
                 send(self(), :stop)
                 :gen_tcp.close(client)
@@ -51,20 +50,20 @@ defmodule SimpleServer do
 
       {:error, :closed} ->
         Actors.Bridge.client_disconected(pid)
-        IO.puts("Client disconnected")
+        IO.puts("SimpleServer: Client disconnected")
 
       {:error, reason} ->
-        IO.puts("Error: #{reason}")
+        IO.puts("SimpleServer: Error - #{reason}")
     end
 
     receive do
       :stop ->
-        IO.puts("Stopping the handle_client...")
+        IO.puts("SimpleServer: Stopping the handle_client...")
         exit(:normal)
 
       _ ->
         # Ignore other messages for now
-        IO.puts("Unknown message received")
+        IO.puts("SimpleServer: Unknown message received")
     end
   end
 

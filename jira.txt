@@ -1,5 +1,12 @@
 Implement where a table ends because everybody quit or because noone wants to play again.
 When a table end the TableManager {:stop, {:shutdown, {:table_manager_shutdown_game_ended, uuid}}}
-so the GameManager that is monitoring him can clear the uuid from the active tables.
+so the GameManager that is monitoring him can clear the uuid from the active tables. ✅
 
-Check that the players that left the table aren't still recieve the messages from the TableManager
+Check that the players that left the table aren't still recieve the messages from the TableManager.
+
+The ref_i_am_thinking_deeply could become a map %{ref: .., count: ...} and if count is equal to 3
+we can trigger an automatic choice so the game can continue. We can also think about a strategy that
+reduce the time of the intervall if the timer expired X times.
+
+Move all the files created by Persistence Actors under a db folder so I can gitignore
+only the db folder.

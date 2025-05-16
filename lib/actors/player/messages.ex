@@ -5,6 +5,8 @@ defmodule Actors.Player.Messages do
 
   def good_luck, do: "Good luck 🍀"
 
+  def i_am_thinking_deeply(name), do: "#{name} 💬 I am thinking deeply..."
+
   def card_stashed(card), do: "#{card} stashed 👌"
 
   def card_shared, do: "Card shared 👌"

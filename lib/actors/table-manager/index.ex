@@ -8,6 +8,7 @@ defmodule Actors.NewTableManager do
 
   use GenServer
 
+  @broadcast_warning :broadcast_warning
   @choice :choice
   @observer_leave :observer_leave
   @player_left_the_game :player_left_the_game
@@ -98,7 +99,25 @@ defmodule Actors.NewTableManager do
     GenServer.start_link(__MODULE__, init_state(uuid, raw_players), name: {:global, uuid})
   end
 
+  @impl true
+  def handle_cast({@broadcast_warning, msg}, %{game_state: game_state} = state) do
+    log("broadcast_warning #{msg}")
+
+    players = game_state[:players]
+
+    Enum.to_list(players)
+    |> Enum.each(fn {_, %{pid: p}} ->
+      Actors.Player.warning_message(
+        p,
+        msg
+      )
+    end)
+
+    {:noreply, state}
+  end
+
   # LEFT THE GAME
+  @impl true
   def handle_cast({@player_left_the_game, name}, %{uuid: uuid, game_state: game_state} = state) do
     log("#{name} left the game #{uuid}")
 
@@ -108,7 +127,10 @@ defmodule Actors.NewTableManager do
 
     count = new_players |> Enum.count(fn {_name, %{is_stopped: s}} -> s end)
 
+    log("#{name} left the game #{uuid} - #{count} players left (#{new_players |> Map.values() |> Enum.filter(& &1.is_stopped) |> Enum.map(& &1.name) |> Enum.join(", ")})")
+
     if count == 3 do
+      log("#{name} everybody left the game #{uuid} - game ended")
       {:stop, {:shutdown, {:table_manager_shutdown_game_ended, uuid}}, state}
     else
       new_game_state = %{game_state | players: new_players}
@@ -336,7 +358,7 @@ defmodule Actors.NewTableManager do
                 # Record STATS
                 new_players_with_leaderboard
                 |> Enum.to_list()
-                |> Enum.each(fn {n, _} -> Actors.Stats.record_game(n, new_players_with_leaderboard) end)
+                |> Enum.each(fn {n, _} -> Actors.Persistence.Stats.record_game(n, new_players_with_leaderboard) end)
 
                 end_game_state = end_game_init_state(uuid, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
@@ -602,6 +624,13 @@ defmodule Actors.NewTableManager do
     case mode do
       {:uuid, uuid} -> GenServer.call({:global, uuid}, {@observer_leave, name})
       {:pid, pid} -> GenServer.call(pid, {@observer_leave, name})
+    end
+  end
+
+  def broadcast_warning(mode, msg) do
+    case mode do
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@broadcast_warning, msg})
+      {:pid, pid} -> GenServer.cast(pid, {@broadcast_warning, msg})
     end
   end
 

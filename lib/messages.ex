@@ -115,10 +115,13 @@ defmodule Messages do
 
   def print_table(game_state, name, piggyback \\ "") do
     players = game_state[:players]
+    observers = game_state[:observers]
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
     turn_winner = game_state[:turn_winner]
     prev_turn = game_state[:prev_turn]
+
+    obs_count = String.pad_trailing("#{map_size(observers)}", 12)
 
     [me, p1, p2] = reorder_by_name(players, name)
 
@@ -540,7 +543,7 @@ defmodule Messages do
 
                               #{my_cards}
 
-                                                               #{me_name} #{mes}
+                              👀 #{obs_count}                  #{me_name} #{mes}
 
                                                                #{owl_line_one_______}
                                                                #{owl_line_two_______}

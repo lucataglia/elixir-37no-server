@@ -32,16 +32,16 @@ defmodule MyApp.SocketTest do
 
     TCP.controlling_process(sock3, pid)
 
-    login_action(sock1)
-    login_action(sock2)
-    login_action(sock3)
+    sign_in_action(sock1)
+    sign_in_action(sock2)
+    sign_in_action(sock3)
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
-    create_user(sock1, "testjeff")
-    create_user(sock2, "testjoebas")
-    create_user(sock3, "testThe")
+    insert_credentials(sock1, "testjeff")
+    insert_credentials(sock2, "testjoebas")
+    insert_credentials(sock3, "testThe")
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
@@ -53,270 +53,255 @@ defmodule MyApp.SocketTest do
     # # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
-    back(sock1)
-    back(sock2)
+    # back(sock1)
+    # back(sock2)
+    # back(sock3)
+
+    play_card(sock1, "4h")
+    stash_card(sock3, "7h")
+    play_card(sock2, "5h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    share(sock1)
+    share(sock2)
+    share(sock3)
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    play_card(sock2, "5h")
+    stash_card(sock1, "4h")
+    play_card(sock3, "7h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    share(sock1)
+    share(sock2)
+    share(sock3)
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    play_card(sock3, "7h")
+    stash_card(sock2, "5h")
+    play_card(sock1, "4h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    share(sock1)
+    share(sock2)
+    share(sock3)
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
+    play_card(sock1, "4h")
+    stash_card(sock3, "7h")
+    play_card(sock2, "5h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    share(sock1)
+    share(sock2)
+    share(sock3)
+
+    replay(sock1)
+    replay(sock2)
+    replay(sock3)
+
     back(sock3)
-    # play_card(sock1, "4h")
-    # stash_card(sock3, "7h")
-    # play_card(sock2, "5h")
+    open_tables(sock3)
 
-    # play_card(sock3, "as")
-    # play_card(sock1, "3s")
-    # play_card(sock2, "ks")
-
-    # play_card(sock1, "jd")
-    # play_card(sock2, "ad")
-    # play_card(sock3, "kd")
-
-    # play_card(sock2, "7d")
-    # play_card(sock3, "3d")
-    # play_card(sock1, "6d")
-
-    # play_card(sock3, "qd")
-    # play_card(sock1, "4d")
-    # play_card(sock2, "5d")
-
-    # play_card(sock3, "2d")
-    # play_card(sock1, "ac")
-    # play_card(sock2, "jh")
-
-    # play_card(sock3, "5c")
-    # play_card(sock1, "3h")
-    # play_card(sock2, "7c")
-
-    # play_card(sock2, "5s")
-    # play_card(sock3, "3c")
-    # play_card(sock1, "6s")
-
-    # play_card(sock1, "7s")
-    # play_card(sock2, "2s")
-    # play_card(sock3, "2c")
-
-    # play_card(sock2, "4c")
-    # play_card(sock3, "kc")
-    # play_card(sock1, "2h")
-
-    # play_card(sock3, "ah")
-    # play_card(sock1, "kh")
-    # play_card(sock2, "qs")
-
-    # play_card(sock3, "qc")
-    # play_card(sock1, "qh")
-    # play_card(sock2, "6c")
-
-    # play_card(sock3, "jc")
-    # play_card(sock1, "6h")
-    # play_card(sock2, "js")
-
-    # share(sock1)
-    # auto_share(sock1)
-
-    # share(sock2)
-    # auto_share(sock2)
-
-    # share(sock3)
-    # auto_share(sock3)
-
-    # replay(sock1)
-    # replay(sock2)
-    # replay(sock3)
-
-    # play_card(sock2, "5h")
-    # stash_card(sock1, "4h")
-    # play_card(sock3, "7h")
-
-    # play_card(sock3, "as")
-    # play_card(sock1, "3s")
-    # play_card(sock2, "ks")
-
-    # play_card(sock1, "jd")
-    # play_card(sock2, "ad")
-    # play_card(sock3, "kd")
-
-    # play_card(sock2, "7d")
-    # play_card(sock3, "3d")
-    # play_card(sock1, "6d")
-
-    # play_card(sock3, "qd")
-    # play_card(sock1, "4d")
-    # play_card(sock2, "5d")
-
-    # play_card(sock3, "2d")
-    # play_card(sock1, "ac")
-    # play_card(sock2, "jh")
-
-    # play_card(sock3, "5c")
-    # play_card(sock1, "3h")
-    # play_card(sock2, "7c")
-
-    # play_card(sock2, "5s")
-    # play_card(sock3, "3c")
-    # play_card(sock1, "6s")
-
-    # play_card(sock1, "7s")
-    # play_card(sock2, "2s")
-    # play_card(sock3, "2c")
-
-    # play_card(sock2, "4c")
-    # play_card(sock3, "kc")
-    # play_card(sock1, "2h")
-
-    # play_card(sock3, "ah")
-    # play_card(sock1, "kh")
-    # play_card(sock2, "qs")
-
-    # play_card(sock3, "qc")
-    # play_card(sock1, "qh")
-    # play_card(sock2, "6c")
-
-    # play_card(sock3, "jc")
-    # play_card(sock1, "6h")
-    # play_card(sock2, "js")
-
-    # share(sock1)
-    # auto_share(sock1)
-
-    # share(sock2)
-    # auto_share(sock2)
-
-    # share(sock3)
-    # auto_share(sock3)
-
-    # replay(sock1)
-    # replay(sock2)
-    # replay(sock3)
-
-    # play_card(sock3, "7h")
-    # stash_card(sock2, "5h")
-    # play_card(sock1, "4h")
-
-    # play_card(sock3, "as")
-    # play_card(sock1, "3s")
-    # play_card(sock2, "ks")
-
-    # play_card(sock1, "jd")
-    # play_card(sock2, "ad")
-    # play_card(sock3, "kd")
-
-    # play_card(sock2, "7d")
-    # play_card(sock3, "3d")
-    # play_card(sock1, "6d")
-
-    # play_card(sock3, "qd")
-    # play_card(sock1, "4d")
-    # play_card(sock2, "5d")
-
-    # play_card(sock3, "2d")
-    # play_card(sock1, "ac")
-    # play_card(sock2, "jh")
-
-    # play_card(sock3, "5c")
-    # play_card(sock1, "3h")
-    # play_card(sock2, "7c")
-
-    # play_card(sock2, "5s")
-    # play_card(sock3, "3c")
-    # play_card(sock1, "6s")
-
-    # play_card(sock1, "7s")
-    # play_card(sock2, "2s")
-    # play_card(sock3, "2c")
-
-    # play_card(sock2, "4c")
-    # play_card(sock3, "kc")
-    # play_card(sock1, "2h")
-
-    # play_card(sock3, "ah")
-    # play_card(sock1, "kh")
-    # play_card(sock2, "qs")
-
-    # play_card(sock3, "qc")
-    # play_card(sock1, "qh")
-    # play_card(sock2, "6c")
-
-    # play_card(sock3, "jc")
-    # play_card(sock1, "6h")
-    # play_card(sock2, "js")
-
-    # share(sock1)
-    # auto_share(sock1)
-
-    # share(sock2)
-    # auto_share(sock2)
-
-    # share(sock3)
-    # auto_share(sock3)
-
-    # replay(sock1)
-    # replay(sock2)
-    # replay(sock3)
-
-    # play_card(sock1, "4h")
-    # stash_card(sock3, "7h")
-    # play_card(sock2, "5h")
-
-    # play_card(sock3, "as")
-    # play_card(sock1, "3s")
-    # play_card(sock2, "ks")
-
-    # play_card(sock1, "jd")
-    # play_card(sock2, "ad")
-    # play_card(sock3, "kd")
-
-    # play_card(sock2, "7d")
-    # play_card(sock3, "3d")
-    # play_card(sock1, "6d")
-
-    # play_card(sock3, "qd")
-    # play_card(sock1, "4d")
-    # play_card(sock2, "5d")
-
-    # play_card(sock3, "2d")
-    # play_card(sock1, "ac")
-    # play_card(sock2, "jh")
-
-    # play_card(sock3, "5c")
-    # play_card(sock1, "3h")
-    # play_card(sock2, "7c")
-
-    # play_card(sock2, "5s")
-    # play_card(sock3, "3c")
-    # play_card(sock1, "6s")
-
-    # play_card(sock1, "7s")
-    # play_card(sock2, "2s")
-    # play_card(sock3, "2c")
-
-    # play_card(sock2, "4c")
-    # play_card(sock3, "kc")
-    # play_card(sock1, "2h")
-
-    # play_card(sock3, "ah")
-    # play_card(sock1, "kh")
-    # play_card(sock2, "qs")
-
-    # play_card(sock3, "qc")
-    # play_card(sock1, "qh")
-    # play_card(sock2, "6c")
-
-    # play_card(sock3, "jc")
-    # play_card(sock1, "6h")
-    # play_card(sock2, "js")
-
-    # share(sock1)
-    # auto_share(sock1)
-
-    # share(sock2)
-    # auto_share(sock2)
-
-    # share(sock3)
-    # auto_share(sock3)
-
-    # replay(sock1)
-    # replay(sock2)
-    # replay(sock3)
-
-    # exit_fn(sock2)
+    exit_fn(sock1)
+    exit_fn(sock2)
     # Optionally wait for processing (if asynchronous)
     Process.sleep(10000)
 
@@ -351,42 +336,44 @@ defmodule MyApp.SocketTest do
   end
 
   defp login_action(socket), do: TCP.send(socket, "b\n")
-  defp create_user(socket, name), do: TCP.send(socket, "#{name} 000000\n")
+  defp sign_in_action(socket), do: TCP.send(socket, "a\n")
+
+  defp insert_credentials(socket, name) do
+    TCP.send(socket, "#{name} 000000\n")
+    Process.sleep(300)
+  end
+
   defp opt_in(socket), do: TCP.send(socket, "play\n")
+  defp open_tables(socket), do: TCP.send(socket, "ot\n")
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(10)
+    Process.sleep(5)
   end
 
   defp stash_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(10)
+    Process.sleep(5)
   end
 
   defp replay(socket) do
     TCP.send(socket, "replay\n")
-    Process.sleep(10)
+    Process.sleep(5)
   end
 
   defp share(socket) do
     TCP.send(socket, "share\n")
-    Process.sleep(10)
-  end
-
-  defp auto_share(socket) do
-    TCP.send(socket, "auto share\n")
-    Process.sleep(10)
+    Process.sleep(5)
   end
 
   defp exit_fn(socket) do
     TCP.send(socket, "exit\n")
-    Process.sleep(10)
+    Process.sleep(5)
   end
 
   defp back(socket) do
     TCP.send(socket, "back\n")
-    Process.sleep(10)
+    Process.sleep(5)
   end
 
   defp assert_response(socket, expected) do

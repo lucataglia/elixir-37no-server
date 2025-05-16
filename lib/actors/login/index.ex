@@ -98,13 +98,13 @@ defmodule Actors.Login do
         {:reply, {:ok, :back}, %{state | behavior: :menu}}
 
       {:ok, name, password} ->
-        case :ets.lookup(:users, name) do
-          [{^name, ^password}] ->
+        case Actors.Persistence.Auth.authenticate(name, password) do
+          {:ok, :authenticated} ->
             log("Login successful for user #{name}.")
 
             {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
-          [{^name, _}] ->
+          {:error, :invalid_password} ->
             GenServer.cast(
               self(),
               {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n", "#{Actors.Login.Messages.invalid_credentials(name, password)}"}
@@ -112,7 +112,7 @@ defmodule Actors.Login do
 
             {:reply, {:error, :invalid_credentials}, state}
 
-          [] ->
+          {:error, :user_not_found} ->
             GenServer.cast(
               self(),
               {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_in()}\n\n", "#{Actors.Login.Messages.invalid_credentials(name, password)}"}
@@ -141,18 +141,17 @@ defmodule Actors.Login do
 
       {:ok, name, password} ->
         # Check the database
-        case :ets.lookup(:users, name) do
+        case Actors.Persistence.Auth.register_user(name, password) do
           # Username is available, insert it
-          [] ->
+          :ok ->
             # TODO: hashing the password before writing
-            :ets.insert(:users, {name, password})
 
             log("User #{name} signed up successfully.")
 
             {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
           # Username already exists
-          _ ->
+          {:error, :user_already_exists} ->
             GenServer.cast(
               self(),
               {:warning, "#{Messages.title()}\n\n#{Actors.Login.Messages.sign_up()}\n\n", Actors.Login.Messages.username_already_exist(name)}

@@ -6,7 +6,10 @@ defmodule Actors.Player do
 
   use GenServer
 
+  @timer_i_am_thinking_deeply 30_000
+
   @better :better
+  @broadcast_i_am_thinking_deeply :broadcast_i_am_thinking_deeply
   @dealer :dealer
   @end_game :end_game
   @game_state_update :game_state_update
@@ -22,6 +25,9 @@ defmodule Actors.Player do
     %{
       behavior: :init,
       client: client,
+      intervals: %{
+        i_am_thinking_deeply: nil
+      },
       lobby_pid: lobby_pid,
       table_manager_pid: nil,
       deck: Deck.factory(),
@@ -94,6 +100,14 @@ defmodule Actors.Player do
 
   # *** ENDPRINT MESSAGES
 
+  @impl true
+  def handle_info(@broadcast_i_am_thinking_deeply, %{name: n, table_manager_pid: table_manager_pid} = state) do
+    msg = Actors.Player.Messages.i_am_thinking_deeply(n)
+    Actors.NewTableManager.broadcast_warning({:pid, table_manager_pid}, msg)
+
+    {:noreply, state}
+  end
+
   # GAME STATE UPDATE (e.g. some player exit the game)
   @impl true
   def handle_cast({@game_state_update, new_game_state, piggiback}, %{name: n} = state) do
@@ -130,9 +144,11 @@ defmodule Actors.Player do
     log(n, "monitor" <> inspect(table_manager_pid))
     Process.monitor(table_manager_pid)
 
+    {:ok, ref} = :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
+
     info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
 
-    {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :dealer}}
+    {:noreply, %{state | intervals: %{i_am_thinking_deeply: ref}, table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :dealer}}
   end
 
   # REJOIN SUCCESS - as better
@@ -167,16 +183,23 @@ defmodule Actors.Player do
     log(n, "monitor" <> inspect(table_manager_pid))
     Process.monitor(table_manager_pid)
 
+    {:ok, ref} =
+      if behavior == :dealer do
+        :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
+      else
+        {:ok, nil}
+      end
+
     info_message(self(), Messages.print_table(game_state, n, Actors.Player.Messages.good_luck()))
 
-    {:noreply, %{state | table_manager_pid: table_manager_pid, behavior: behavior, game_state: game_state}}
+    {:noreply, %{state | intervals: %{i_am_thinking_deeply: ref}, table_manager_pid: table_manager_pid, behavior: behavior, game_state: game_state}}
   end
 
   # STATE - DEALER
   @impl true
   def handle_cast(
         {@recv, data},
-        %{game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
+        %{intervals: %{i_am_thinking_deeply: ref_i_am_thinking_deeply}, game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
       ) do
     log(name, "recv: #{data}")
 
@@ -197,9 +220,11 @@ defmodule Actors.Player do
           if Map.has_key?(cards, String.to_atom(data)) do
             case Deck.check_card_is_valid(data, cards, turn_first_card) do
               :ok ->
+                :timer.cancel(ref_i_am_thinking_deeply)
                 Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, choice)
 
               {:ok, :change_ranking} ->
+                :timer.cancel(ref_i_am_thinking_deeply)
                 Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, %{choice | ranking: 0})
 
               {:error, :wrong_suit} ->
@@ -336,13 +361,15 @@ defmodule Actors.Player do
   def handle_cast({@dealer, game_state}, %{name: n, stash: s, behavior: :better} = state) do
     info_message(self(), Messages.print_table(game_state, n))
 
+    {:ok, ref} = :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
+
     if s do
       log(n, "unstash: #{inspect(s)}")
 
       GenServer.cast(self(), {@recv, s})
     end
 
-    {:noreply, %{state | stash: nil, game_state: game_state, behavior: :dealer}}
+    {:noreply, %{state | intervals: %{i_am_thinking_deeply: ref}, stash: nil, game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
