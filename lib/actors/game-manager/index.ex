@@ -139,7 +139,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@list_all_open_tables}, from, %{active_games: active_games} = state) do
-    log("#{from} list_all_open_tables")
+    log("#{inspect(from)} list_all_open_tables")
 
     list =
       Enum.to_list(active_games)

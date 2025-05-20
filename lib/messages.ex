@@ -13,7 +13,7 @@ defmodule Messages do
         """
         #{clear_char()}
         +----------------------------------------+
-        | Tre sette chapa no (Luca Tagliabue) #{ita_flag()} |
+        | Tre sette ciapa no (Luca Tagliabue) #{ita_flag()} |
         +----------------------------------------+
 
         """
@@ -113,7 +113,10 @@ defmodule Messages do
     [goal, "\n", warning, IO.ANSI.reset()] |> IO.iodata_to_binary()
   end
 
-  def print_table(game_state, name, piggyback \\ "") do
+  def print_table(game_state, name, opts \\ []) do
+    piggyback = Keyword.get(opts, :piggyback, "empty")
+    stash = Keyword.get(opts, :stash, "")
+
     players = game_state[:players]
     observers = game_state[:observers]
     dealer_index = game_state[:dealer_index]
@@ -543,7 +546,7 @@ defmodule Messages do
 
                               #{my_cards}
 
-                              👀 #{obs_count}                  #{me_name} #{mes}
+                              👀 #{obs_count}                  #{me_name} #{mes} #{stash}
 
                                                                #{owl_line_one_______}
                                                                #{owl_line_two_______}

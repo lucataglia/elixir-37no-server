@@ -46,7 +46,17 @@ defmodule Actors.NewTableManager do
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, last, stack, is_looser, is_stopped}}
       # }
-      game_state: %{prev_turn: [], turn_first_card: nil, dealer_index: 0, used_card_count: 0, info: "", turn_winner: "", there_is_a_looser: false, players: raw_players, observers: %{}}
+      game_state: %{
+        prev_turn: [],
+        turn_first_card: nil,
+        dealer_index: 0,
+        used_card_count: 0,
+        info: "",
+        turn_winner: "",
+        there_is_a_looser: false,
+        players: raw_players,
+        observers: %{}
+      }
     }
 
   defp end_game_init_state(uuid, there_is_a_looser, game_dealer_index, players, observers),
@@ -163,7 +173,7 @@ defmodule Actors.NewTableManager do
         table_manager_pid: self(),
         new_game_state: new_game_state,
         is_dealer: is_dealer,
-        piggiback: Actors.NewTableManager.Messages.rejoin_success()
+        piggyback: Actors.NewTableManager.Messages.rejoin_success()
       }
     )
 
@@ -189,7 +199,7 @@ defmodule Actors.NewTableManager do
       pid,
       %{
         new_game_state: new_game_state,
-        piggiback: Actors.NewTableManager.Messages.observe_success()
+        piggyback: Actors.NewTableManager.Messages.observe_success()
       }
     )
 

@@ -91,8 +91,8 @@ defmodule Actors.Lobby do
   end
 
   @impl true
-  def handle_cast({@msg_info, msg, piggiback}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{msg}#{Messages.message(piggiback)}")
+  def handle_cast({@msg_info, msg, piggyback}, %{client: client} = state) do
+    :gen_tcp.send(client, "#{msg}#{Messages.message(piggyback)}")
     {:noreply, state}
   end
 
@@ -103,8 +103,8 @@ defmodule Actors.Lobby do
   end
 
   @impl true
-  def handle_cast({@msg_warning, msg, piggiback}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{msg}#{Messages.warning(piggiback)}")
+  def handle_cast({@msg_warning, msg, piggyback}, %{client: client} = state) do
+    :gen_tcp.send(client, "#{msg}#{Messages.warning(piggyback)}")
     {:noreply, state}
   end
 
@@ -115,8 +115,8 @@ defmodule Actors.Lobby do
   end
 
   @impl true
-  def handle_cast({@msg_success, msg, piggiback}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{msg}#{Messages.success(piggiback)}")
+  def handle_cast({@msg_success, msg, piggyback}, %{client: client} = state) do
+    :gen_tcp.send(client, "#{msg}#{Messages.success(piggyback)}")
     {:noreply, state}
   end
 
@@ -131,14 +131,14 @@ defmodule Actors.Lobby do
 
         case Actors.GameManager.add_player(name, player_pid) do
           {:error, :user_already_registered} ->
-            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: Actors.Lobby.Messages.user_already_opted_in(name))
+            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: Actors.Lobby.Messages.user_already_opted_in(name))
 
             Process.exit(player_pid, :normal)
 
             {:noreply, state}
 
           {:ok, :user_opted_in, msg} ->
-            success_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", piggiback: msg)
+            success_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n", piggyback: msg)
 
             Process.monitor(player_pid)
 
@@ -153,13 +153,13 @@ defmodule Actors.Lobby do
       {:ok, :list_my_open_tables} ->
         case Actors.GameManager.list_open_tables(name) do
           {:ok, :no_active_game} ->
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: "You have zero game in progess")
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: "You have zero game in progess")
 
             {:noreply, state}
 
           {:ok, list} ->
             msg = Enum.map(list, fn {game_uuid, game_desc} -> "#{Colors.with_underline("rejoin #{game_uuid}")} - #{game_desc}" end)
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: msg)
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: msg)
 
             {:noreply, state}
         end
@@ -167,13 +167,13 @@ defmodule Actors.Lobby do
       {:ok, :list_all_open_tables} ->
         case Actors.GameManager.list_all_open_tables() do
           {:ok, list} when list == [] ->
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: "There are zero games in progess")
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: "There are zero games in progess")
 
             {:noreply, state}
 
           {:ok, list} ->
             msg = Enum.map(list, fn {game_uuid, game_desc} -> "#{Colors.with_underline("observe #{game_uuid}")} - #{game_desc}" end)
-            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: msg)
+            info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: msg)
 
             {:noreply, state}
         end
@@ -183,7 +183,7 @@ defmodule Actors.Lobby do
 
         case Actors.GameManager.rejoin(name, uuid, player_pid) do
           {:ok, :table_manager_informed} ->
-            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: "Please wait...")
+            warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: "Please wait...")
 
             Process.monitor(player_pid)
 
@@ -192,7 +192,7 @@ defmodule Actors.Lobby do
           {:error, :game_does_not_exist} ->
             warning_message(self(),
               message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
-              piggiback: "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."
+              piggyback: "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."
             )
 
             Process.exit(player_pid, :normal)
@@ -207,7 +207,7 @@ defmodule Actors.Lobby do
           {:ok, :table_manager_informed} ->
             warning_message(self(),
               message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
-              piggiback: "Please wait..."
+              piggyback: "Please wait..."
             )
 
             Process.monitor(player_pid)
@@ -217,7 +217,7 @@ defmodule Actors.Lobby do
           {:error, :game_does_not_exist} ->
             warning_message(self(),
               message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
-              piggiback: "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."
+              piggyback: "Game #{Colors.with_underline(uuid)} does not exist. It may have been terminated."
             )
 
             Process.exit(player_pid, :normal)
@@ -233,7 +233,7 @@ defmodule Actors.Lobby do
       {:error, :invalid_input} ->
         warning_message(self(),
           message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n",
-          piggiback: Actors.Lobby.Messages.invalid_input_lobby(data)
+          piggyback: Actors.Lobby.Messages.invalid_input_lobby(data)
         )
 
         {:noreply, state}
@@ -249,13 +249,13 @@ defmodule Actors.Lobby do
           {:error, :user_not_registered} ->
             warning_message(self(),
               message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n",
-              piggiback: "Player #{name} cannot be removed from that game because he didn't do the opt-in"
+              piggyback: "Player #{name} cannot be removed from that game because he didn't do the opt-in"
             )
 
             {:noreply, state}
 
           {:ok, msg} ->
-            success_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggiback: msg)
+            success_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: msg)
 
             {:noreply, %{state | behavior: @behavior_lobby}}
         end
@@ -263,7 +263,7 @@ defmodule Actors.Lobby do
       {:error, :invalid_input} ->
         warning_message(self(),
           message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.opted_in()}\n\n",
-          piggiback: Actors.Lobby.Messages.invalid_input_opted_in(data)
+          piggyback: Actors.Lobby.Messages.invalid_input_opted_in(data)
         )
 
         {:noreply, state}
@@ -322,34 +322,34 @@ defmodule Actors.Lobby do
   @spec info_message(atom() | pid() | {atom(), any()} | {:via, atom(), any()}, keyword()) :: :ok
   def info_message(pid, opts) do
     msg = Keyword.get(opts, :message, "")
-    piggiback = Keyword.get(opts, :piggiback, "")
+    piggyback = Keyword.get(opts, :piggyback, "")
 
-    if piggiback do
-      GenServer.cast(pid, {@msg_info, msg, piggiback})
+    if piggyback do
+      GenServer.cast(pid, {@msg_info, msg, piggyback})
     else
-      GenServer.cast(pid, {@msg_info, piggiback})
+      GenServer.cast(pid, {@msg_info, piggyback})
     end
   end
 
   def warning_message(pid, opts) do
     msg = Keyword.get(opts, :message, "")
-    piggiback = Keyword.get(opts, :piggiback, "")
+    piggyback = Keyword.get(opts, :piggyback, "")
 
-    if piggiback do
-      GenServer.cast(pid, {@msg_warning, msg, piggiback})
+    if piggyback do
+      GenServer.cast(pid, {@msg_warning, msg, piggyback})
     else
-      GenServer.cast(pid, {@msg_warning, piggiback})
+      GenServer.cast(pid, {@msg_warning, piggyback})
     end
   end
 
   def success_message(pid, opts) do
     msg = Keyword.get(opts, :message, "")
-    piggiback = Keyword.get(opts, :piggiback, "")
+    piggyback = Keyword.get(opts, :piggyback, "")
 
-    if piggiback do
-      GenServer.cast(pid, {@msg_success, msg, piggiback})
+    if piggyback do
+      GenServer.cast(pid, {@msg_success, msg, piggyback})
     else
-      GenServer.cast(pid, {@msg_success, piggiback})
+      GenServer.cast(pid, {@msg_success, piggyback})
     end
   end
 

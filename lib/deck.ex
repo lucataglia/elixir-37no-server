@@ -137,47 +137,33 @@ defmodule Deck do
         ""
       end
 
-    {_, ordered_cards} =
+    # Sort cards by sort_id and filter out used cards if needed
+    sorted_cards =
       cards
       |> Enum.to_list()
       |> Enum.sort_by(fn {_, %{sort_id: s}} -> s end)
-      |> Enum.map(fn {_, card} ->
-        new_p =
-          case card do
-            %{used: true, pretty: p} ->
-              if print_also_used_cards do
-                String.pad_trailing(p, 2)
-              else
-                String.pad_trailing("", 2)
-              end
-
-            %{used: false, pretty: p} ->
-              String.pad_trailing(p, 2)
-
-            %{pretty: p} ->
-              String.pad_trailing(p, 2)
-
-            _ ->
-              ""
-          end
-
-        {new_p, card[:suit]}
+      |> Enum.filter(fn {_, card} ->
+        print_also_used_cards or card.used == false
       end)
-      |> Enum.reduce(
-        {"hearts", ""},
-        fn {p, s}, {prev, acc} ->
-          if s == prev do
-            {s, "#{acc}#{p} "}
-          else
-            {s, "#{acc}     #{p} "}
-          end
-        end
-      )
+      |> Enum.map(fn {_, card} ->
+        {card.pretty, card.suit}
+      end)
+
+    # Build the output string with an extra space when suit changes
+    {_last_suit, output} =
+      Enum.reduce(sorted_cards, {nil, ""}, fn {pretty, suit}, {prev_suit, acc} ->
+        spacer = if prev_suit != nil and prev_suit != suit, do: "      ", else: " "
+        {suit, acc <> spacer <> String.pad_trailing(pretty, 2)}
+      end)
 
     if print_also_high_cards_count do
-      "#{ordered_cards}  - High cards: #{high_card_number}"
+      "#{String.trim(output)}  - High cards: #{high_card_number}"
     else
-      ordered_cards
+      String.trim(output)
     end
+  end
+
+  def starting_player_can_take_all?() do
+    # TODO
   end
 end

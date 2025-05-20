@@ -17,6 +17,7 @@ defmodule Actors.Player do
   @msg_success :sucess
   @msg_warning :warning
   @observer :observer
+  @print_table :print_table
   @recv :recv
   @rejoin_success :rejoin_success
   @start_game :start_game
@@ -98,6 +99,12 @@ defmodule Actors.Player do
     {:noreply, state}
   end
 
+  @impl true
+  def handle_cast({@print_table, piggyback}, %{client: client, name: name, stash: stash, game_state: game_state} = state) do
+    :gen_tcp.send(client, Messages.print_table(game_state, name, piggyback: piggyback, stash: stash))
+    {:noreply, state}
+  end
+
   # *** ENDPRINT MESSAGES
 
   @impl true
@@ -110,15 +117,15 @@ defmodule Actors.Player do
 
   # GAME STATE UPDATE (e.g. some player exit the game)
   @impl true
-  def handle_cast({@game_state_update, new_game_state, piggiback}, %{name: n} = state) do
-    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
+  def handle_cast({@game_state_update, new_game_state, piggyback}, state) do
+    print_table(self(), Utils.Colors.with_yellow(piggyback))
 
     {:noreply, %{state | game_state: new_game_state}}
   end
 
   @impl true
-  def handle_cast({@game_state_update, new_game_state}, %{name: n} = state) do
-    info_message(self(), Messages.print_table(new_game_state, n))
+  def handle_cast({@game_state_update, new_game_state}, state) do
+    print_table(self())
 
     {:noreply, %{state | game_state: new_game_state}}
   end
@@ -127,17 +134,17 @@ defmodule Actors.Player do
 
   # JOIN AS OBSERVER
   @impl true
-  def handle_cast({@observer, new_game_state, piggiback}, %{name: n, lobby_pid: lobby_pid} = state) do
+  def handle_cast({@observer, new_game_state, piggyback}, %{lobby_pid: lobby_pid} = state) do
     Actors.Lobby.game_start(lobby_pid)
 
-    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
+    print_table(self(), Utils.Colors.with_yellow(piggyback))
 
     {:noreply, %{state | game_state: new_game_state, behavior: :observer}}
   end
 
   # REJOIN SUCCESS - as dealer
   @impl true
-  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggiback}, %{name: n, lobby_pid: lobby_pid} = state) do
+  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggyback}, %{name: n, lobby_pid: lobby_pid} = state) do
     log(n, "Rejoin success as dealer")
     Actors.Lobby.game_start(lobby_pid)
 
@@ -146,21 +153,21 @@ defmodule Actors.Player do
 
     {:ok, ref} = :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
 
-    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
+    print_table(self(), Utils.Colors.with_yellow(piggyback))
 
     {:noreply, %{state | intervals: %{i_am_thinking_deeply: ref}, table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :dealer}}
   end
 
   # REJOIN SUCCESS - as better
   @impl true
-  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggiback}, %{name: n, lobby_pid: lobby_pid} = state) do
+  def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggyback}, %{name: n, lobby_pid: lobby_pid} = state) do
     log(n, "Rejoin success as better")
     Actors.Lobby.game_start(lobby_pid)
 
     log(n, "monitor" <> inspect(table_manager_pid))
     Process.monitor(table_manager_pid)
 
-    info_message(self(), Messages.print_table(new_game_state, n, Utils.Colors.with_yellow(piggiback)))
+    print_table(self(), Utils.Colors.with_yellow(piggyback))
 
     {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :better}}
   end
@@ -190,7 +197,7 @@ defmodule Actors.Player do
         {:ok, nil}
       end
 
-    info_message(self(), Messages.print_table(game_state, n, Actors.Player.Messages.good_luck()))
+    print_table(self(), Actors.Player.Messages.good_luck())
 
     {:noreply, %{state | intervals: %{i_am_thinking_deeply: ref}, table_manager_pid: table_manager_pid, behavior: behavior, game_state: game_state}}
   end
@@ -206,7 +213,7 @@ defmodule Actors.Player do
     case Utils.Regex.check_is_valid_card_key(data) do
       {:error, :invalid_input} ->
         piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-        info_message(self(), Messages.print_table(game_state, name, piggyback))
+        print_table(self(), piggyback)
 
         {:noreply, state}
 
@@ -229,23 +236,23 @@ defmodule Actors.Player do
 
               {:error, :wrong_suit} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-                info_message(self(), Messages.print_table(game_state, name, piggyback))
+                print_table(self(), piggyback)
 
               {:error, :card_already_used} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
-                info_message(self(), Messages.print_table(game_state, name, piggyback))
+                print_table(self(), piggyback)
 
               {:error, :invalid_input} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-                info_message(self(), Messages.print_table(game_state, name, piggyback))
+                print_table(self(), piggyback)
             end
           else
             piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
-            info_message(self(), Messages.print_table(game_state, name, piggyback))
+            print_table(self(), piggyback)
           end
         else
           piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-          info_message(self(), Messages.print_table(game_state, name, piggyback))
+          print_table(self(), piggyback)
         end
 
         {:noreply, state}
@@ -253,15 +260,15 @@ defmodule Actors.Player do
   end
 
   @impl true
-  def handle_cast({@dealer, game_state}, %{name: n, behavior: :dealer} = state) do
-    info_message(self(), Messages.print_table(game_state, n))
+  def handle_cast({@dealer, game_state}, %{behavior: :dealer} = state) do
+    print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
-  def handle_cast({@better, game_state}, %{name: n, behavior: :dealer} = state) do
-    info_message(self(), Messages.print_table(game_state, n))
+  def handle_cast({@better, game_state}, %{behavior: :dealer} = state) do
+    print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
@@ -277,7 +284,7 @@ defmodule Actors.Player do
         IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
       end
 
-    info_message(self(), Messages.print_table(game_state, name, piggyback))
+    print_table(self(), piggyback)
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
   end
@@ -296,7 +303,7 @@ defmodule Actors.Player do
         case Utils.Regex.check_is_valid_card_key(data) do
           {:error, :invalid_input} ->
             piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-            info_message(self(), Messages.print_table(game_state, name, piggyback))
+            print_table(self(), piggyback)
 
             state
 
@@ -312,42 +319,42 @@ defmodule Actors.Player do
                   :ok ->
                     log(name, "stash: #{inspect(choice.key)}")
 
-                    info_message(self(), Actors.Player.Messages.card_stashed(choice.key))
+                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
                     %{state | stash: choice.key}
 
                   {:ok, :change_ranking} ->
                     log(name, "stash: #{inspect(choice.key)}")
 
-                    info_message(self(), Actors.Player.Messages.card_stashed(choice.key))
+                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
                     %{state | stash: choice.key}
 
                   {:error, :wrong_suit} ->
                     piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-                    info_message(self(), Messages.print_table(game_state, name, piggyback))
+                    print_table(self(), piggyback)
 
                     state
 
                   {:error, :card_already_used} ->
                     piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
-                    info_message(self(), Messages.print_table(game_state, name, piggyback))
+                    print_table(self(), piggyback)
 
                     state
 
                   {:error, :invalid_input} ->
                     piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-                    info_message(self(), Messages.print_table(game_state, name, piggyback))
+                    print_table(self(), piggyback)
 
                     state
                 end
               else
                 piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
-                info_message(self(), Messages.print_table(game_state, name, piggyback))
+                print_table(self(), piggyback)
 
                 state
               end
             else
               piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-              info_message(self(), Messages.print_table(game_state, name, piggyback))
+              print_table(self(), piggyback)
 
               state
             end
@@ -359,7 +366,7 @@ defmodule Actors.Player do
 
   @impl true
   def handle_cast({@dealer, game_state}, %{name: n, stash: s, behavior: :better} = state) do
-    info_message(self(), Messages.print_table(game_state, n))
+    print_table(self())
 
     {:ok, ref} = :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
 
@@ -373,14 +380,14 @@ defmodule Actors.Player do
   end
 
   @impl true
-  def handle_cast({@better, game_state}, %{name: n, behavior: :better} = state) do
-    info_message(self(), Messages.print_table(game_state, n))
+  def handle_cast({@better, game_state}, %{behavior: :better} = state) do
+    print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
   @impl true
-  def handle_cast({@end_game, game_state}, %{name: name, behavior: :better} = state) do
+  def handle_cast({@end_game, game_state}, %{behavior: :better} = state) do
     piggyback =
       if game_state[:there_is_a_looser] do
         "#{IO.ANSI.format([:magenta, :bright, Messages.game_ends_message()])}#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
@@ -388,7 +395,7 @@ defmodule Actors.Player do
         IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
       end
 
-    info_message(self(), Messages.print_table(game_state, name, piggyback))
+    print_table(self(), piggyback)
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
   end
@@ -454,15 +461,15 @@ defmodule Actors.Player do
   end
 
   @impl true
-  def handle_cast({@dealer, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
-    info_message(self(), Messages.print_table(game_state, n))
+  def handle_cast({@dealer, game_state}, %{behavior: :ready_to_replay} = state) do
+    print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
-  def handle_cast({@better, game_state}, %{name: n, behavior: :ready_to_replay} = state) do
-    info_message(self(), Messages.print_table(game_state, n))
+  def handle_cast({@better, game_state}, %{behavior: :ready_to_replay} = state) do
+    print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
@@ -500,6 +507,10 @@ defmodule Actors.Player do
     GenServer.cast(pid, {@msg_info, msg})
   end
 
+  def print_table(pid, piggyback \\ "") do
+    GenServer.cast(pid, {@print_table, piggyback})
+  end
+
   def warning_message(pid, msg) do
     GenServer.cast(pid, {@msg_warning, msg})
   end
@@ -511,21 +522,21 @@ defmodule Actors.Player do
     end
   end
 
-  def game_state_update(pid, args, piggiback \\ nil) do
+  def game_state_update(pid, args, piggyback \\ nil) do
     %{
       new_game_state: new_game_state
     } = args
 
-    GenServer.cast(pid, {@game_state_update, new_game_state, piggiback})
+    GenServer.cast(pid, {@game_state_update, new_game_state, piggyback})
   end
 
   def join_as_observer(pid, args) do
     %{
       new_game_state: new_game_state,
-      piggiback: piggiback
+      piggyback: piggyback
     } = args
 
-    GenServer.cast(pid, {@observer, new_game_state, piggiback})
+    GenServer.cast(pid, {@observer, new_game_state, piggyback})
   end
 
   def rejoin_success(pid, args) do
@@ -533,10 +544,10 @@ defmodule Actors.Player do
       table_manager_pid: table_manager_pid,
       new_game_state: new_game_state,
       is_dealer: is_dealer,
-      piggiback: piggiback
+      piggyback: piggyback
     } = args
 
-    GenServer.cast(pid, {@rejoin_success, table_manager_pid, new_game_state, is_dealer, piggiback})
+    GenServer.cast(pid, {@rejoin_success, table_manager_pid, new_game_state, is_dealer, piggyback})
   end
 
   def you_are_the_dealer(pid, args) do
