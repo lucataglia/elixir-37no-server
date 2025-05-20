@@ -124,6 +124,34 @@ defmodule Messages do
     turn_winner = game_state[:turn_winner]
     prev_turn = game_state[:prev_turn]
 
+    end_game = game_state[:end_game]
+    replay_names = end_game[:replay_names]
+    share_names = end_game[:share_names]
+
+    share =
+      if share_names !== [] do
+        "\n\n" <>
+          Utils.Colors.with_underline("Share") <>
+          ":\n\n" <>
+          (share_names
+           |> Enum.map(fn name ->
+             "#{String.pad_trailing(name, 14)} #{Deck.print_card_in_order(players[name][:cards], print_also_used_cards: true, print_also_high_cards_count: true)}"
+           end)
+           |> Enum.join("\n"))
+      else
+        ""
+      end
+
+    replay =
+      if replay_names !== [] do
+        "\n\n\n" <>
+          Utils.Colors.with_underline("Replay") <>
+          ":\n\n" <>
+          Actors.NewTableManager.Messages.wants_to_replay(replay_names)
+      else
+        ""
+      end
+
     obs_count = String.pad_trailing("#{map_size(observers)}", 12)
 
     [me, p1, p2] = reorder_by_name(players, name)
@@ -475,6 +503,8 @@ defmodule Messages do
         {"#{acc}#{space_after_change}#{colored_key}#{spaces}", count_1, count_034, p}
       end)
 
+    IO.puts(used_card_count)
+
     {me_end_game, p1_end_game, p2_end_game} =
       cond do
         used_card_count == Deck.card_count() ->
@@ -511,8 +541,30 @@ defmodule Messages do
           {str, str, str}
       end
 
-    end_game_card_value_recap = "\n#{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
-    end_game_card_hierarchy_recap = "\n#{Utils.Colors.with_underline("Card hierarchy")}: 3 > 2 > Ace > King > Queen > Jack > 7 > 6 > 5 > 4"
+    end_game_card_value_recap =
+      cond do
+        used_card_count == Deck.card_count() ->
+          ""
+
+        true ->
+          "\n#{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
+      end
+
+    end_game_card_hierarchy_recap =
+      cond do
+        used_card_count == Deck.card_count() ->
+          ""
+
+        true ->
+          "\n\n#{Utils.Colors.with_underline("Card hierarchy")}: 3 > 2 > Ace > King > Queen > Jack > 7 > 6 > 5 > 4"
+      end
+
+    piggyback_with_leading_new_line =
+      if piggyback do
+        "\n#{piggyback}"
+      else
+        ""
+      end
 
     """
     #{clear_char()}
@@ -557,11 +609,12 @@ defmodule Messages do
     #{me_end_game}                                             #{owl_line_seven_____}
     #{p1_end_game}                                             #{owl_line_eight_____}
     #{p2_end_game}                                             #{owl_line_nine______}
-    #{end_game_card_value_recap}
-    #{end_game_card_hierarchy_recap}
-
-    #{piggyback}
-    """
+    """ <>
+      end_game_card_value_recap <>
+      end_game_card_hierarchy_recap <>
+      share <>
+      replay <>
+      piggyback_with_leading_new_line
   end
 
   # Private methods

@@ -407,13 +407,6 @@ defmodule Actors.Player do
       {:share} ->
         case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
           {:ok} ->
-            info_message(self(), Actors.Player.Messages.card_shared())
-
-            cards = game_state[:players][name][:cards]
-
-            ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
-            info_message(self(), Actors.Player.Messages.my_cards_was(ordered_cards))
-
             {:noreply, state}
 
           {:error, :already_shared} ->
@@ -438,13 +431,6 @@ defmodule Actors.Player do
       {:share} ->
         case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
           {:ok} ->
-            info_message(self(), Actors.Player.Messages.card_shared())
-
-            cards = game_state[:players][name][:cards]
-
-            ordered_cards = Deck.print_card_in_order(cards, print_also_used_cards: true, print_also_high_cards_count: true)
-            info_message(self(), Actors.Player.Messages.my_cards_was(ordered_cards))
-
             {:noreply, state}
 
           {:error, :already_shared} ->
@@ -522,7 +508,7 @@ defmodule Actors.Player do
     end
   end
 
-  def game_state_update(pid, args, piggyback \\ nil) do
+  def game_state_update(pid, args, piggyback \\ "") do
     %{
       new_game_state: new_game_state
     } = args
