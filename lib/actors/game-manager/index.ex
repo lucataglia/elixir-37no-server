@@ -31,6 +31,15 @@ defmodule Actors.GameManager do
 
   # HANDLE INFO
   @impl true
+  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}} = reason}, %{active_games: active_games} = state) do
+    log(":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
+
+    new_active_games = Map.delete(active_games, uuid)
+
+    {:noreply, %{state | active_games: new_active_games}}
+  end
+
+  @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_game_ended, uuid}} = reason}, %{active_games: active_games} = state) do
     log(":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
 

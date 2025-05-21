@@ -8,6 +8,9 @@ defmodule Actors.NewTableManager do
 
   use GenServer
 
+  # 5 mins
+  @timer_inactivity 5 * 60 * 1000
+
   @broadcast_warning :broadcast_warning
   @choice :choice
   @observer_leave :observer_leave
@@ -16,11 +19,15 @@ defmodule Actors.NewTableManager do
   @player_observe :player_observe
   @replay :replay
   @share :share
+  @shutdown_due_to_inactivity :shutdown_due_to_inactivity
+  @wrapper_inner :wrapper_inner
+  @wrapper_outer :wrapper_outer
 
   defp init_state(uuid, raw_players),
     do: %{
       uuid: uuid,
       behavior: :game,
+      timers_shutdown_due_to_inactivity: nil,
       deck: Deck.shuffle_and_chunk_deck(),
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
@@ -39,6 +46,10 @@ defmodule Actors.NewTableManager do
       #   there_is_a_looser: ""
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points,  leaderboard, index, current, last, stack, is_looser, is_stopped}}
+      #   end_game: %{
+      #     replay_names: [],
+      #     share_names: []
+      #   }
       # }
       game_state: %{
         prev_turn: [],
@@ -57,10 +68,11 @@ defmodule Actors.NewTableManager do
       }
     }
 
-  defp end_game_init_state(uuid, used_card_count, there_is_a_looser, game_dealer_index, players, observers),
+  defp end_game_init_state(uuid, timers_shutdown_due_to_inactivity, used_card_count, there_is_a_looser, game_dealer_index, players, observers),
     do: %{
       uuid: uuid,
       behavior: :end_game,
+      timers_shutdown_due_to_inactivity: timers_shutdown_due_to_inactivity,
       deck: Deck.shuffle_and_chunk_deck(),
       # %{
       #   [name]: %{ [name]: %{key, label, suit, pretty, ranking, point}}
@@ -79,6 +91,10 @@ defmodule Actors.NewTableManager do
       #   there_is_a_looser: ""
       #   observers: %{name => pid}
       #   players: %{ [name]: %{pid, name, cards, points, leaderboard, index, current, last, stack, is_looser, is_stopped}}
+      #   end_game: %{
+      #     replay_names: [],
+      #     share_names: []
+      #   }
       # }
       game_state: %{
         prev_turn: [],
@@ -105,8 +121,37 @@ defmodule Actors.NewTableManager do
     GenServer.start_link(__MODULE__, init_state(uuid, raw_players), name: {:global, uuid})
   end
 
+  # HANDLE INFO
   @impl true
-  def handle_cast({@broadcast_warning, msg}, %{game_state: game_state} = state) do
+  def handle_info(@shutdown_due_to_inactivity, %{timers_shutdown_due_to_inactivity: ref, uuid: uuid} = state) do
+    log("shutdown_due_to_inactivity #{uuid} #{inspect(ref)}")
+
+    {:stop, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}}, state}
+  end
+
+  # Handled only for the cast, not for the call
+  @impl true
+  def handle_cast({msg, @wrapper_outer}, %{timers_shutdown_due_to_inactivity: ref} = state) do
+    log("Wrapper #{inspect(ref)}")
+
+    case ref do
+      nil ->
+        nil
+
+      r ->
+        millis_left = Process.cancel_timer(r)
+        log("Wrapper #{inspect(ref)} clear timer: #{millis_left}")
+    end
+
+    new_ref = Process.send_after(self(), @shutdown_due_to_inactivity, @timer_inactivity)
+
+    GenServer.cast(self(), {msg, @wrapper_inner})
+
+    {:noreply, %{state | timers_shutdown_due_to_inactivity: new_ref}}
+  end
+
+  @impl true
+  def handle_cast({{@broadcast_warning, msg}, @wrapper_inner}, %{game_state: game_state} = state) do
     log("broadcast_warning #{msg}")
 
     players = game_state[:players]
@@ -124,7 +169,7 @@ defmodule Actors.NewTableManager do
 
   # LEFT THE GAME
   @impl true
-  def handle_cast({@player_left_the_game, name}, %{uuid: uuid, game_state: game_state} = state) do
+  def handle_cast({{@player_left_the_game, name}, @wrapper_inner}, %{uuid: uuid, game_state: game_state} = state) do
     log("#{name} left the game #{uuid}")
 
     players = game_state[:players]
@@ -155,7 +200,7 @@ defmodule Actors.NewTableManager do
 
   # REJOIN
   @impl true
-  def handle_cast({@player_rejoin, name, player_pid}, %{game_state: game_state} = state) do
+  def handle_cast({{@player_rejoin, name, player_pid}, @wrapper_inner}, %{game_state: game_state} = state) do
     dealer_index = game_state[:dealer_index]
     players = game_state[:players]
     is_dealer = players[:index] == dealer_index
@@ -186,7 +231,7 @@ defmodule Actors.NewTableManager do
 
   # OBSERVE
   @impl true
-  def handle_cast({@player_observe, name, pid}, %{game_state: game_state} = state) do
+  def handle_cast({{@player_observe, name, pid}, @wrapper_inner}, %{game_state: game_state} = state) do
     observers = game_state[:observers]
     new_observers = Map.put(observers, name, pid)
     new_game_state = %{game_state | observers: new_observers}
@@ -218,7 +263,11 @@ defmodule Actors.NewTableManager do
 
   # GAME
   @impl true
-  def handle_cast({@choice, name, card}, %{uuid: uuid, current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} = state) do
+  def handle_cast(
+        {{@choice, name, card}, @wrapper_inner},
+        %{uuid: uuid, timers_shutdown_due_to_inactivity: timers_shutdown_due_to_inactivity, current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} =
+          state
+      ) do
     log("#{name} choice: #{card[:key]}")
 
     dealer_index = game_state[:dealer_index]
@@ -300,28 +349,50 @@ defmodule Actors.NewTableManager do
         cond do
           # END GAME
           new_used_card_count == Deck.card_count() ->
+            # First calculate all players' points sums
+            points_sums =
+              new_game_state[:players]
+              |> Enum.map(fn {n, p} ->
+                points_sum = p[:stack] |> Enum.map(fn {_, %{points: p}} -> p end) |> Enum.sum()
+                {n, points_sum}
+              end)
+
+            # Count players with less than 1 point
+            less_than_one_count = Enum.count(points_sums, fn {_, pts} -> pts < 1 end)
+
+            # Find the player with >=1 points if exactly two have <1
+            player_with_more_than_one =
+              if less_than_one_count == 2 do
+                Enum.find(points_sums, fn {_, pts} -> pts >= 1 end)
+              else
+                nil
+              end
+
             # Update points and leaderboard
             {new_players_with_leaderboard, there_is_a_looser} =
               new_game_state[:players]
               |> Enum.to_list()
               |> Enum.map(fn {n, p} ->
-                points_sum = p[:stack] |> Enum.map(fn {_, %{points: p}} -> p end) |> Enum.sum()
+                # Get this player's points sum from precomputed list
+                {_, points_sum} = Enum.find(points_sums, fn {name, _} -> name == n end)
 
                 new_points =
                   cond do
-                    new_game_state[:turn_winner] == n ->
-                      cond do
-                        points_sum < 1 -> 11
-                        # divide per 1.0 is to force the number to be float
-                        true -> Float.ceil(points_sum / 1.0) |> trunc()
-                      end
+                    # New rule: if two players have <1, third gets 0
+                    less_than_one_count == 2 && player_with_more_than_one && elem(player_with_more_than_one, 0) == n ->
+                      0
 
+                    # Existing rule: <1 points gets 11
+                    points_sum < 1 ->
+                      11
+
+                    # Turn winner gets ceiling
+                    new_game_state[:turn_winner] == n ->
+                      Float.ceil(points_sum) |> trunc()
+
+                    # Others get floor
                     true ->
-                      cond do
-                        points_sum < 1 -> 11
-                        # divide per 1.0 is to force the number to be float
-                        true -> Float.floor(points_sum / 1.0) |> trunc()
-                      end
+                      Float.floor(points_sum) |> trunc()
                   end
 
                 new_leaderboard = [new_points | p[:leaderboard]]
@@ -336,7 +407,9 @@ defmodule Actors.NewTableManager do
 
                 {n, new_p, is_looser}
               end)
-              |> Enum.reduce({%{}, false}, fn {n, p, is_looser}, {acc_p, acc_is_looser} -> {Map.put(acc_p, n, p), is_looser || acc_is_looser} end)
+              |> Enum.reduce({%{}, false}, fn {n, p, is_looser}, {acc_p, acc_is_looser} ->
+                {Map.put(acc_p, n, p), is_looser || acc_is_looser}
+              end)
 
             new_game_state_with_leaderboard = %{new_game_state | there_is_a_looser: there_is_a_looser, dealer_index: nil, players: new_players_with_leaderboard}
 
@@ -366,14 +439,14 @@ defmodule Actors.NewTableManager do
                 |> Enum.to_list()
                 |> Enum.each(fn {n, _} -> Actors.Persistence.Stats.record_game(n, new_players_with_leaderboard) end)
 
-                end_game_state = end_game_init_state(uuid, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state = end_game_init_state(uuid, timers_shutdown_due_to_inactivity, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
 
               false ->
                 new_game_dealer_index = rem(game_dealer_index + 1, 3)
-                end_game_state = end_game_init_state(uuid, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state = end_game_init_state(uuid, timers_shutdown_due_to_inactivity, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
@@ -465,12 +538,12 @@ defmodule Actors.NewTableManager do
   end
 
   @impl true
-  def handle_cast({@replay, name}, %{behavior: :end_game, game_state: %{there_is_a_looser: false}} = state) do
+  def handle_cast({{@replay, name}, @wrapper_inner}, %{behavior: :end_game, game_state: %{there_is_a_looser: false}} = state) do
     handle_end_game({@replay, {name, false}}, state)
   end
 
   @impl true
-  def handle_cast({@replay, name}, %{behavior: :end_game, game_state: %{there_is_a_looser: true}} = state) do
+  def handle_cast({{@replay, name}, @wrapper_inner}, %{behavior: :end_game, game_state: %{there_is_a_looser: true}} = state) do
     handle_end_game({@replay, {name, true}}, state)
   end
 
@@ -595,17 +668,17 @@ defmodule Actors.NewTableManager do
   def send_choice(mode, name, card) do
     case mode do
       {:uuid, uuid} ->
-        GenServer.cast({:global, uuid}, {@choice, name, card})
+        GenServer.cast({:global, uuid}, {{@choice, name, card}, @wrapper_outer})
 
       {:pid, pid} ->
-        GenServer.cast(pid, {@choice, name, card})
+        GenServer.cast(pid, {{@choice, name, card}, @wrapper_outer})
     end
   end
 
   def replay(mode, name) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@replay, name})
-      {:pid, pid} -> GenServer.cast(pid, {@replay, name})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {{@replay, name}, @wrapper_outer})
+      {:pid, pid} -> GenServer.cast(pid, {{@replay, name}, @wrapper_outer})
     end
   end
 
@@ -618,27 +691,22 @@ defmodule Actors.NewTableManager do
 
   def player_left_the_game(mode, name) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@player_left_the_game, name})
-      {:pid, pid} -> GenServer.cast(pid, {@player_left_the_game, name})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {{@player_left_the_game, name}, @wrapper_outer})
+      {:pid, pid} -> GenServer.cast(pid, {{@player_left_the_game, name}, @wrapper_outer})
     end
   end
 
   def player_rejoin(mode, name, player_pid) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@player_rejoin, name, player_pid})
-      {:pid, pid} -> GenServer.cast(pid, {@player_rejoin, name, player_pid})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {{@player_rejoin, name, player_pid}, @wrapper_outer})
+      {:pid, pid} -> GenServer.cast(pid, {{@player_rejoin, name, player_pid}, @wrapper_outer})
     end
   end
 
-  @spec player_observe(
-          {:pid, atom() | pid() | {atom(), any()} | {:via, atom(), any()}} | {:uuid, any()},
-          any(),
-          any()
-        ) :: :ok
   def player_observe(mode, name, player_pid) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@player_observe, name, player_pid})
-      {:pid, pid} -> GenServer.cast(pid, {@player_observe, name, player_pid})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {{@player_observe, name, player_pid}, @wrapper_outer})
+      {:pid, pid} -> GenServer.cast(pid, {{@player_observe, name, player_pid}, @wrapper_outer})
     end
   end
 
@@ -651,8 +719,8 @@ defmodule Actors.NewTableManager do
 
   def broadcast_warning(mode, msg) do
     case mode do
-      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {@broadcast_warning, msg})
-      {:pid, pid} -> GenServer.cast(pid, {@broadcast_warning, msg})
+      {:uuid, uuid} -> GenServer.cast({:global, uuid}, {{@broadcast_warning, msg}, @wrapper_outer})
+      {:pid, pid} -> GenServer.cast(pid, {{@broadcast_warning, msg}, @wrapper_outer})
     end
   end
 

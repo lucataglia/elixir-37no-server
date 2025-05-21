@@ -15,6 +15,10 @@ defmodule Actors.Lobby.Messages do
     "A user name with name #{Utils.Colors.with_underline(name)} already opted in for that game"
   end
 
+  def table_maanger_stopped_due_to_inactivity() do
+    "Table closed due to inactivity"
+  end
+
   def lobby(name) do
     stats =
       case Actors.Persistence.Stats.get_stats(name) do

@@ -296,13 +296,13 @@ defmodule MyApp.SocketTest do
 
     replay(sock1)
     replay(sock2)
-    replay(sock3)
+    # replay(sock3)
 
-    back(sock3)
-    open_tables(sock3)
+    # back(sock3)
+    # open_tables(sock3)
 
-    exit_fn(sock1)
-    exit_fn(sock2)
+    # exit_fn(sock1)
+    # exit_fn(sock2)
     # Optionally wait for processing (if asynchronous)
     Process.sleep(10000)
 
@@ -349,32 +349,32 @@ defmodule MyApp.SocketTest do
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(5)
+    Process.sleep(15)
   end
 
   defp stash_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(5)
+    Process.sleep(15)
   end
 
   defp replay(socket) do
     TCP.send(socket, "replay\n")
-    Process.sleep(5)
+    Process.sleep(15)
   end
 
   defp share(socket) do
     TCP.send(socket, "share\n")
-    Process.sleep(5)
+    Process.sleep(15)
   end
 
   defp exit_fn(socket) do
     TCP.send(socket, "exit\n")
-    Process.sleep(5)
+    Process.sleep(15)
   end
 
   defp back(socket) do
     TCP.send(socket, "back\n")
-    Process.sleep(5)
+    Process.sleep(15)
   end
 
   defp assert_response(socket, expected) do

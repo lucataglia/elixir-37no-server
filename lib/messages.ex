@@ -503,8 +503,6 @@ defmodule Messages do
         {"#{acc}#{space_after_change}#{colored_key}#{spaces}", count_1, count_034, p}
       end)
 
-    IO.puts(used_card_count)
-
     {me_end_game, p1_end_game, p2_end_game} =
       cond do
         used_card_count == Deck.card_count() ->

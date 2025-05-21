@@ -53,6 +53,13 @@ defmodule Actors.Player do
 
   # HANDLE INFO
   @impl true
+  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, _uuid}} = reason}, %{name: name} = state) do
+    log(name, ":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
+
+    {:stop, reason, state}
+  end
+
+  @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :bridge_shutdown_client_exit} = reason}, %{name: name, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
     log(name, ":DOWN Lobby #{inspect(pid)} exited with reason #{inspect(reason)}")
 
@@ -72,13 +79,6 @@ defmodule Actors.Player do
 
     {:stop, reason, state}
   end
-
-  # @impl true
-  # def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
-  #   log("CIAO", ":DOWN Lobby #{inspect(pid)} exited with reason #{inspect(reason)}")
-
-  #   {:stop, reason, state}
-  # end
 
   # PRINT MESSAGES
   @impl true
