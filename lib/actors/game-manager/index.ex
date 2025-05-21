@@ -77,7 +77,12 @@ defmodule Actors.GameManager do
 
           {:reply, {:ok, :user_opted_in, msg}, %{state | players: new_players}}
         else
-          uuid = UUID.uuid4()
+          uuid =
+            case System.argv() do
+              [] -> UUID.uuid4()
+              _ -> "123e4567-e89b-4a3c-8f12-123456789abc"
+            end
+
           {:ok, table_manager_pid} = Actors.NewTableManager.start(uuid, new_players)
           Process.monitor(table_manager_pid)
 

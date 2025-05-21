@@ -100,8 +100,8 @@ defmodule Actors.Player do
   end
 
   @impl true
-  def handle_cast({@print_table, piggyback}, %{client: client, name: name, stash: stash, game_state: game_state} = state) do
-    :gen_tcp.send(client, Messages.print_table(game_state, name, piggyback: piggyback, stash: stash))
+  def handle_cast({@print_table, piggyback}, %{client: client, name: name, stash: stash, game_state: game_state, behavior: behavior} = state) do
+    :gen_tcp.send(client, Messages.print_table(game_state, name, piggyback: piggyback, stash: stash, behavior: behavior))
     {:noreply, state}
   end
 
@@ -273,22 +273,6 @@ defmodule Actors.Player do
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
-  @impl true
-  def handle_cast({@end_game, game_state}, %{name: name, behavior: :dealer} = state) do
-    log(name, "game_state[:there_is_a_looser]: " <> inspect(game_state[:there_is_a_looser]))
-
-    piggyback =
-      if game_state[:there_is_a_looser] do
-        "#{IO.ANSI.format([:magenta, :bright, Messages.game_ends_message()])}#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
-      else
-        IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
-      end
-
-    print_table(self(), piggyback)
-
-    {:noreply, %{state | game_state: game_state, behavior: :end_game}}
-  end
-
   # STATE - BETTER
   @impl true
   def handle_cast({@recv, data}, %{name: name, game_state: game_state, deck: deck, behavior: :better} = state) do
@@ -386,23 +370,18 @@ defmodule Actors.Player do
     {:noreply, %{state | game_state: game_state, behavior: :better}}
   end
 
+  # STATE - END GAME
   @impl true
-  def handle_cast({@end_game, game_state}, %{behavior: :better} = state) do
-    piggyback =
-      if game_state[:there_is_a_looser] do
-        "#{IO.ANSI.format([:magenta, :bright, Messages.game_ends_message()])}#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
-      else
-        IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])
-      end
+  def handle_cast({@end_game, game_state}, %{name: name} = state) do
+    log(name, "end_game - there_is_a_looser" <> inspect(game_state[:there_is_a_looser]))
 
-    print_table(self(), piggyback)
+    print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
   end
 
-  # STATE - END GAME
   @impl true
-  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, game_state: game_state, behavior: :end_game} = state) do
+  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
     case Utils.Regex.check_end_game_input(data) do
       {:share} ->
         case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
@@ -426,7 +405,7 @@ defmodule Actors.Player do
 
   # STATE - READY TO REPLY
   @impl true
-  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, game_state: game_state, behavior: :ready_to_replay} = state) do
+  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :ready_to_replay} = state) do
     case Utils.Regex.check_end_game_input_ready_to_replay(data) do
       {:share} ->
         case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do

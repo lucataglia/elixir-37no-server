@@ -27,14 +27,16 @@ defmodule MyApp.SocketTest do
     {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+    {:ok, sock4} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
     pid = spawn_link(fn -> loop(sock3) end)
 
     TCP.controlling_process(sock3, pid)
 
-    sign_in_action(sock1)
-    sign_in_action(sock2)
-    sign_in_action(sock3)
+    sign_in(sock1)
+    sign_in(sock2)
+    sign_in(sock3)
+    sign_in(sock4)
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
@@ -42,6 +44,7 @@ defmodule MyApp.SocketTest do
     insert_credentials(sock1, "testjeff")
     insert_credentials(sock2, "testjoebas")
     insert_credentials(sock3, "testThe")
+    insert_credentials(sock4, "testObs")
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
@@ -53,9 +56,8 @@ defmodule MyApp.SocketTest do
     # # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
-    # back(sock1)
-    # back(sock2)
-    # back(sock3)
+    all_open_tables(sock4)
+    observe_table(sock4, "123e4567-e89b-4a3c-8f12-123456789abc")
 
     play_card(sock3, "7h")
     play_card(sock1, "4h")
@@ -336,8 +338,8 @@ defmodule MyApp.SocketTest do
     end
   end
 
-  defp login_action(socket), do: TCP.send(socket, "b\n")
-  defp sign_in_action(socket), do: TCP.send(socket, "a\n")
+  defp sign_up(socket), do: TCP.send(socket, "b\n")
+  defp sign_in(socket), do: TCP.send(socket, "a\n")
 
   defp insert_credentials(socket, name) do
     TCP.send(socket, "#{name} 000000\n")
@@ -346,6 +348,8 @@ defmodule MyApp.SocketTest do
 
   defp opt_in(socket), do: TCP.send(socket, "play\n")
   defp open_tables(socket), do: TCP.send(socket, "ot\n")
+  defp all_open_tables(socket), do: TCP.send(socket, "obs\n")
+  defp observe_table(socket, uuid), do: TCP.send(socket, "observe #{uuid}\n")
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")

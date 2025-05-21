@@ -41,7 +41,7 @@ defmodule Messages do
 
   def type_replay_to_start_a_new_game(), do: "Type replay to start a new game\n"
 
-  def end_game_invalid_input(), do: "Type replay to play again \n"
+  def end_game_invalid_input(), do: "Type replay to continue \n"
 
   def ready_to_replay_invalid_input(), do: "Other players still need to confirm if they want to replay \n"
 
@@ -116,6 +116,7 @@ defmodule Messages do
   def print_table(game_state, name, opts \\ []) do
     piggyback = Keyword.get(opts, :piggyback, "empty")
     stash = Keyword.get(opts, :stash, "")
+    behavior = Keyword.get(opts, :behavior, "")
 
     players = game_state[:players]
     observers = game_state[:observers]
@@ -146,7 +147,7 @@ defmodule Messages do
       if replay_names !== [] do
         "\n\n\n" <>
           Utils.Colors.with_underline("Replay") <>
-          ":\n\n" <>
+          ": " <>
           Actors.NewTableManager.Messages.wants_to_replay(replay_names)
       else
         ""
@@ -345,7 +346,11 @@ defmodule Messages do
 
     # CARDS
 
-    my_cards = Deck.print_card_in_order(me[:cards])
+    my_cards =
+      case behavior do
+        :observer -> ""
+        _ -> Deck.print_card_in_order(me[:cards])
+      end
 
     # STACK
     p1s =
@@ -398,6 +403,19 @@ defmodule Messages do
       end
 
     # END GAME
+    end_game_message =
+      case used_card_count == Deck.card_count() do
+        true ->
+          if game_state[:there_is_a_looser] do
+            "\n\n\n#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
+          else
+            "\n\n\n#{IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])}"
+          end
+
+        false ->
+          ""
+      end
+
     end_game_label =
       case used_card_count == Deck.card_count() do
         true ->
@@ -612,6 +630,7 @@ defmodule Messages do
       end_game_card_hierarchy_recap <>
       share <>
       replay <>
+      end_game_message <>
       piggyback_with_leading_new_line
   end
 

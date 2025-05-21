@@ -728,4 +728,10 @@ defmodule Actors.NewTableManager do
   defp log(msg) do
     IO.puts("#{Colors.with_yellow_bright("TableManager")} #{msg}")
   end
+
+  defp each_in_list(enum, fun) when is_function(fun, 1) do
+    enum
+    |> Enum.to_list()
+    |> Enum.each(fun)
+  end
 end
