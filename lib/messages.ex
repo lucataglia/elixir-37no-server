@@ -125,6 +125,30 @@ defmodule Messages do
     turn_winner = game_state[:turn_winner]
     prev_turn = game_state[:prev_turn]
 
+    # Observer
+    notifications_observers = game_state[:notifications][:observers]
+
+    observed_accepted_count =
+      Enum.count(notifications_observers, fn el ->
+        case el do
+          {_, ^name, "accepted"} -> true
+          _ -> false
+        end
+      end)
+
+    observer_notification_msg = NotificationTable.render_observer_notifications_table(notifications_observers, name)
+    observed_notification_msg = NotificationTable.render_observed_notifications_table(notifications_observers, name)
+
+    name_of_the_player_that_i_am_observing =
+      Enum.find_value(notifications_observers, fn
+        {observer, observed, "accepted"} when observer == name -> observed
+        _ -> nil
+      end)
+
+    IO.puts(inspect(observers))
+    obs_count = String.pad_trailing("#{map_size(observers)} (#{observed_accepted_count})", 12)
+    # *** End Observer
+
     end_game = game_state[:end_game]
     replay_names = end_game[:replay_names]
     share_names = end_game[:share_names]
@@ -153,9 +177,7 @@ defmodule Messages do
         ""
       end
 
-    obs_count = String.pad_trailing("#{map_size(observers)}", 12)
-
-    [me, p1, p2] = reorder_by_name(players, name)
+    [me, p1, p2] = reorder_by_name(players, name_of_the_player_that_i_am_observing || name)
 
     # LEADERBOARD, LEGEND and EXAMPLES
     [{_, first}, {_, second}, {_, third}] = players |> Enum.sort_by(fn {_, %{leaderboard: l}} -> Enum.sum(l) end)
@@ -333,19 +355,20 @@ defmodule Messages do
     owl_line_one_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "┌──────────────────┐"]), else: ""
     owl_line_two_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "│ It's your turn!! │"]), else: ""
     owl_line_three_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "└──────────────────┘"]), else: ""
-    owl_line_four______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "        \\"]), else: ""
-    owl_line_five______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         \\"]), else: ""
-    owl_line_six_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          ,_,"]), else: ""
-    owl_line_seven_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (O,O)"]), else: ""
-    owl_line_eight_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (   )"]), else: ""
-    owl_line_nine______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          \" \""]), else: ""
+    # owl_line_four______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "        \\"]), else: ""
+    # owl_line_five______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         \\"]), else: ""
+    # owl_line_six_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          ,_,"]), else: ""
+    # owl_line_seven_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (O,O)"]), else: ""
+    # owl_line_eight_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (   )"]), else: ""
+    # owl_line_nine______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          \" \""]), else: ""
 
     # CARDS
 
     my_cards =
-      case behavior do
-        :observer -> ""
-        _ -> Deck.print_card_in_order(me[:cards])
+      cond do
+        name_of_the_player_that_i_am_observing -> Deck.print_card_in_order(me[:cards])
+        behavior == :observer -> ""
+        true -> Deck.print_card_in_order(me[:cards])
       end
 
     # STACK
@@ -421,10 +444,10 @@ defmodule Messages do
           String.pad_trailing(Utils.Colors.with_underline("Player"), 24) <>
             String.pad_trailing(Utils.Colors.with_underline("Points"), 22) <>
             Utils.Colors.with_underline("Cards") <>
-            "\n"
+            "\n\n"
 
         false ->
-          String.duplicate(" ", 16)
+          ""
       end
 
     {p1_end_game_cards, _, _, _} =
@@ -547,32 +570,16 @@ defmodule Messages do
               true -> me[:name]
             end
 
-          {"#{String.pad_trailing(me_name, 14)} #{String.pad_trailing("#{me[:points]}", 12)} #{me_end_game_cards}",
-           "#{String.pad_trailing(p1_name, 14)} #{String.pad_trailing("#{p1[:points]}", 12)} #{p1_end_game_cards}",
-           "#{String.pad_trailing(p2_name, 14)} #{String.pad_trailing("#{p2[:points]}", 12)} #{p2_end_game_cards}"}
+          {"#{String.pad_trailing(me_name, 14)} #{String.pad_trailing("#{me[:points]}", 12)} #{me_end_game_cards}\n",
+           "#{String.pad_trailing(p1_name, 14)} #{String.pad_trailing("#{p1[:points]}", 12)} #{p1_end_game_cards}\n",
+           "#{String.pad_trailing(p2_name, 14)} #{String.pad_trailing("#{p2[:points]}", 12)} #{p2_end_game_cards}\n"}
 
         true ->
-          str = String.duplicate(" ", 13)
-          {str, str, str}
+          {"", "", ""}
       end
 
-    end_game_card_value_recap =
-      cond do
-        used_card_count == Deck.card_count() ->
-          ""
-
-        true ->
-          "\n#{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
-      end
-
-    end_game_card_hierarchy_recap =
-      cond do
-        used_card_count == Deck.card_count() ->
-          ""
-
-        true ->
-          "\n\n#{Utils.Colors.with_underline("Card hierarchy")}: 3 > 2 > Ace > King > Queen > Jack > 7 > 6 > 5 > 4"
-      end
+    card_value_recap = "   #{Utils.Colors.with_underline("Card values")}: #{Utils.Colors.with_red_bright("Ace = 1 pt")}, #{Utils.Colors.with_yellow("2/3/face = 1/3 pt")}, others = 0"
+    card_hierarchy_recap = "#{Utils.Colors.with_underline("Card hierarchy")}: 3 > 2 > Ace > King > Queen > Jack > 7 > 6 > 5 > 4"
 
     piggyback_with_leading_new_line =
       if piggyback do
@@ -585,12 +592,15 @@ defmodule Messages do
     #{clear_char()}
     #{title()}
 
+                                      #{card_value_recap}
+                                      #{card_hierarchy_recap}
+
+
                               #{leaderboardxxxxxxxxxxx}           #{legendxxxxxxxx}               #{examplexxxxxxx}
                               1. #{first_leaderboardxx}           #{heartsxxxxxxxx}               #{exheartsxxxxxx}
                               2. #{second_leaderboardx}           #{diamondsxxxxxx}               #{exdiamondsxxxx}
                               3. #{third_leaderboardxx}           #{clubsxxxxxxxxx}               #{exclubsxxxxxxx}
                                                                #{spadesxxxxxxxx}               #{exspadesxxxxxx}
-
 
 
                               #{infoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
@@ -615,21 +625,21 @@ defmodule Messages do
 
                               👀 #{obs_count}                  #{me_name} #{mes} #{stash}
 
-                                                               #{owl_line_one_______}
-                                                               #{owl_line_two_______}
-                                                               #{owl_line_three_____}
-                                                               #{owl_line_four______}
-                                                               #{owl_line_five______}
-    #{end_game_label}                                          #{owl_line_six_______}
-    #{me_end_game}                                             #{owl_line_seven_____}
-    #{p1_end_game}                                             #{owl_line_eight_____}
-    #{p2_end_game}                                             #{owl_line_nine______}
+
+                                                              #{owl_line_one_______}
+                                                              #{owl_line_two_______}
+                                                              #{owl_line_three_____}
+
     """ <>
-      end_game_card_value_recap <>
-      end_game_card_hierarchy_recap <>
+      end_game_label <>
+      me_end_game <>
+      p1_end_game <>
+      p2_end_game <>
       share <>
       replay <>
       end_game_message <>
+      observed_notification_msg <>
+      observer_notification_msg <>
       piggyback_with_leading_new_line
   end
 
@@ -646,5 +656,57 @@ defmodule Messages do
   end
 end
 
-# Enum.split_with(game_state, fn %{name: name} -> name == "mario" end)
-# game_state = [%{name: "jeff"}, %{name: "mario"}, %{name: "ale"}]
+defmodule NotificationTable do
+  alias TableRex.Table
+
+  def render_observer_notifications_table(notifications_observers, name) do
+    # Filter relevant notifications for this observer
+    rows =
+      notifications_observers
+      |> Enum.filter(fn
+        {observer, _, _} when observer == name -> true
+        _ -> false
+      end)
+      |> Enum.map(fn
+        {_, observed, "pending"} ->
+          ["🕣 Pending", observed, "Please wait for response"]
+
+        {_, observed, "rejected"} ->
+          ["❌ Rejected", observed, "Didn't accept to be observed"]
+
+        {_, observed, "accepted"} ->
+          ["✅ Accepted", observed, "Accept to be observed"]
+      end)
+
+    if rows == [] do
+      ""
+    else
+      # Create the table with headers
+      "#{Table.new(rows, ["Status", "Observed", "Message"]) |> Table.put_column_meta(0, align: :center) |> Table.render!()}"
+    end
+  end
+
+  def render_observed_notifications_table(notifications_observers, name) do
+    # Filter relevant notifications for this observed
+    rows =
+      notifications_observers
+      |> Enum.filter(fn
+        {_, observed, status} when observed == name and status in ["pending", "accepted"] -> true
+        _ -> false
+      end)
+      |> Enum.map(fn
+        {observer, _, "pending"} ->
+          ["🕣 Pending", observer, "want to observe your fame"]
+
+        {observer, _, "accepted"} ->
+          ["✅ Accepted", observer, "You accept to be observed"]
+      end)
+
+    if rows == [] do
+      ""
+    else
+      # Create the table with headers
+      "\n\n#{Table.new(rows, ["Status", "Observer", "Message"]) |> Table.put_column_meta(0, align: :center) |> Table.render!()}"
+    end
+  end
+end

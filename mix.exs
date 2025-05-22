@@ -35,6 +35,7 @@ defmodule Elixir37noServer.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:decimal, "~> 2.3.0"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:table_rex, "~> 3.1"},
       {:ucwidth, "~> 0.1.0"},
       {:uuid, "~> 1.1"}
       # {:dep_from_hexpm, "~> 0.3.0"},

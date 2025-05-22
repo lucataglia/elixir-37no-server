@@ -73,7 +73,8 @@ defmodule Actors.Bridge do
 
   # FORWARD EVERYTHING TO Actor.Lobby
   @impl true
-  def handle_cast({@recv, _} = envelop, %{lobby_actor: lobby_actor, behavior: :logged} = state) do
+  def handle_cast({@recv, _} = envelop, %{name: n, lobby_actor: lobby_actor, behavior: :logged} = state) do
+    log(n, inspect(envelop))
     GenServer.cast(lobby_actor, envelop)
 
     {:noreply, state}
@@ -113,5 +114,9 @@ defmodule Actors.Bridge do
   # *** private api
   defp log(msg) do
     IO.puts("#{Colors.with_cyan("Bridge")} #{msg}")
+  end
+
+  defp log(name, msg) do
+    IO.puts("#{Colors.with_cyan("Bridge")} #{name}: #{msg}")
   end
 end

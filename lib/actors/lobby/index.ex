@@ -196,7 +196,7 @@ defmodule Actors.Lobby do
 
             Process.monitor(player_pid)
 
-            {:noreply, state}
+            {:noreply, %{state | player_pid: player_pid}}
 
           {:error, :game_does_not_exist} ->
             warning_message(self(),
@@ -221,7 +221,7 @@ defmodule Actors.Lobby do
 
             Process.monitor(player_pid)
 
-            {:noreply, state}
+            {:noreply, %{state | player_pid: player_pid}}
 
           {:error, :game_does_not_exist} ->
             warning_message(self(),
@@ -233,8 +233,6 @@ defmodule Actors.Lobby do
 
             {:noreply, state}
         end
-
-        {:noreply, state}
 
       {:ok, :back} ->
         {:stop, {:shutdown, :lobby_shutdown_back_msg}, state}
@@ -281,6 +279,8 @@ defmodule Actors.Lobby do
 
   @impl true
   def handle_cast({@game_start}, %{name: name} = state) do
+    log(name, "game_start: #{state[:behavior]}")
+
     case state[:behavior] do
       # e.g. rejoin
       @behavior_lobby ->
@@ -301,7 +301,8 @@ defmodule Actors.Lobby do
 
   # STATE - GAME START
   @impl true
-  def handle_cast({@recv, _} = envelop, %{player_pid: player_pid, behavior: @behavior_forward_everything_to_player_actor} = state) do
+  def handle_cast({@recv, _} = envelop, %{name: n, player_pid: player_pid, behavior: @behavior_forward_everything_to_player_actor} = state) do
+    log(n, inspect(envelop))
     GenServer.cast(player_pid, envelop)
     # GenServer.cast(player_pid, Tuple.insert_at(envelop, tuple_size(envelop), self()))
 

@@ -64,6 +64,9 @@ defmodule MyApp.SocketTest do
     stash_card(sock3, "7h")
     play_card(sock2, "5h")
 
+    # testjeff accept a user that does not exist
+    accept_to_be_observed(sock1, "testnotex")
+
     play_card(sock3, "as")
     play_card(sock1, "3s")
     play_card(sock2, "ks")
@@ -80,6 +83,10 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "4d")
     play_card(sock2, "5d")
 
+    observe_player(sock4, "testnotex")
+    observe_player(sock4, "testjeff")
+    observe_player(sock4, "testjeff")
+
     play_card(sock3, "2d")
     play_card(sock1, "ac")
     play_card(sock2, "jh")
@@ -87,6 +94,12 @@ defmodule MyApp.SocketTest do
     play_card(sock3, "5c")
     play_card(sock1, "3h")
     play_card(sock2, "7c")
+
+    # testjeff accept a user that does not exist
+    accept_to_be_observed(sock1, "testnotex")
+
+    # testjeff reject a testobs
+    reject_to_be_observed(sock1, "testObs")
 
     play_card(sock2, "5s")
     play_card(sock3, "3c")
@@ -104,9 +117,14 @@ defmodule MyApp.SocketTest do
     play_card(sock1, "kh")
     play_card(sock2, "qs")
 
+    observe_player(sock4, "testThe")
+
     play_card(sock3, "qc")
     play_card(sock1, "qh")
     play_card(sock2, "6c")
+
+    # testThe accept a testObs
+    accept_to_be_observed(sock3, "testObs")
 
     play_card(sock3, "jc")
     play_card(sock1, "6h")
@@ -180,6 +198,8 @@ defmodule MyApp.SocketTest do
     replay(sock2)
     replay(sock3)
 
+    reject_to_be_observed(sock3, "testObs")
+
     play_card(sock3, "7h")
     stash_card(sock2, "5h")
     play_card(sock1, "4h")
@@ -239,6 +259,8 @@ defmodule MyApp.SocketTest do
     replay(sock1)
     replay(sock2)
     replay(sock3)
+
+    back(sock4)
 
     play_card(sock1, "4h")
     stash_card(sock3, "7h")
@@ -300,8 +322,8 @@ defmodule MyApp.SocketTest do
     replay(sock2)
     replay(sock3)
 
-    back(sock3)
-    open_tables(sock3)
+    back(sock2)
+    open_tables(sock2)
 
     back(sock1)
     # exit_fn(sock2)
@@ -422,6 +444,9 @@ defmodule MyApp.SocketTest do
   defp open_tables(socket), do: TCP.send(socket, "ot\n")
   defp all_open_tables(socket), do: TCP.send(socket, "obs\n")
   defp observe_table(socket, uuid), do: TCP.send(socket, "observe #{uuid}\n")
+  defp observe_player(socket, name), do: TCP.send(socket, "observe #{name}\n")
+  defp accept_to_be_observed(socket, observer), do: TCP.send(socket, "obs yes #{observer}\n")
+  defp reject_to_be_observed(socket, observer), do: TCP.send(socket, "obs no #{observer}\n")
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")

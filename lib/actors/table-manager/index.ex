@@ -8,6 +8,8 @@ defmodule Actors.NewTableManager do
 
   use GenServer
 
+  @ask_to_observe :ask_to_observe
+  @answer_to_be_observed :answer_to_be_observed
   @broadcast_warning :broadcast_warning
   @choice :choice
   @observer_leave :observer_leave
@@ -58,6 +60,7 @@ defmodule Actors.NewTableManager do
         there_is_a_looser: false,
         players: raw_players,
         observers: %{},
+        notifications: %{observers: []},
         end_game: %{
           replay_names: [],
           share_names: []
@@ -65,7 +68,7 @@ defmodule Actors.NewTableManager do
       }
     }
 
-  defp end_game_init_state(uuid, timers_shutdown_due_to_inactivity, used_card_count, there_is_a_looser, game_dealer_index, players, observers),
+  defp end_game_init_state(uuid, timers_shutdown_due_to_inactivity, notifications, used_card_count, there_is_a_looser, game_dealer_index, players, observers),
     do: %{
       uuid: uuid,
       behavior: :end_game,
@@ -103,6 +106,7 @@ defmodule Actors.NewTableManager do
         there_is_a_looser: there_is_a_looser,
         players: players,
         observers: observers,
+        notifications: notifications,
         end_game: %{
           replay_names: [],
           share_names: []
@@ -129,7 +133,7 @@ defmodule Actors.NewTableManager do
   # Handled only for the cast, not for the call
   @impl true
   def handle_cast({msg, @wrapper_outer}, %{timers_shutdown_due_to_inactivity: ref} = state) do
-    log("Wrapper #{inspect(ref)}")
+    log("Wrapper #{inspect(msg)} #{inspect(ref)}")
 
     case ref do
       nil ->
@@ -142,6 +146,7 @@ defmodule Actors.NewTableManager do
 
     new_ref = Process.send_after(self(), @shutdown_due_to_inactivity, timer_inactivity())
 
+    IO.puts(inspect({msg, @wrapper_inner}))
     GenServer.cast(self(), {msg, @wrapper_inner})
 
     {:noreply, %{state | timers_shutdown_due_to_inactivity: new_ref}}
@@ -277,6 +282,94 @@ defmodule Actors.NewTableManager do
   end
 
   @impl true
+  def handle_call({@ask_to_observe, observer, observed}, _from, %{game_state: game_state} = state) do
+    log("#{observer} ask to observe #{observed}")
+
+    observers = game_state[:observers]
+    players = game_state[:players]
+
+    case {Map.has_key?(observers, observer), Map.has_key?(players, observed)} do
+      {false, _} ->
+        log("#{observer} ask to observe #{observed} - :you_are_not_an_observer")
+        {:reply, {:error, :you_are_not_an_observer}, state}
+
+      {_, false} ->
+        log("#{observer} ask to observe #{observed} - :player_does_not_exist")
+        {:reply, {:error, :player_does_not_exist}, state}
+
+      {true, true} ->
+        log("#{observer} ask to observe #{observed} - :ok")
+
+        notification_alreasy_exist =
+          Enum.find(get_in(game_state, [:notifications, :observers]), fn el ->
+            case el do
+              {^observer, ^observed, _} -> true
+              _ -> false
+            end
+          end)
+
+        if notification_alreasy_exist do
+          {:reply, {:error, :you_already_ask_that_player}, state}
+        else
+          # New ask_to_observe request will override the previous one
+          new_game_state =
+            update_in(game_state, [:notifications, :observers], fn list ->
+              # Filter out existing notifications
+              filtered_list = Enum.reject(list, fn {existing_observer, _, _} -> existing_observer == observer end)
+
+              # Append the new entry
+              filtered_list ++ [{observer, observed, "pending"}]
+            end)
+
+          new_state = %{state | game_state: new_game_state}
+
+          each_in_list(players, observers, fn {_, %{pid: p}} ->
+            Actors.Player.game_state_update(p, %{new_game_state: new_game_state})
+          end)
+
+          {:reply, {:ok, new_state}, new_state}
+        end
+    end
+  end
+
+  @impl true
+  def handle_call({@answer_to_be_observed, observed, observer, answer}, _from, %{game_state: game_state} = state) do
+    log("#{observed} #{answer} to be observed by #{observer}")
+
+    observers = game_state[:observers]
+    players = game_state[:players]
+
+    case {Map.has_key?(observers, observer), Map.has_key?(players, observed)} do
+      {false, _} ->
+        log("#{observed} #{answer} to be observed by #{observer} - :he_is_not_an_observer")
+        {:reply, {:error, :he_is_not_an_observer}, state}
+
+      {_, false} ->
+        log("#{observed} #{answer} to be observed by #{observer} - :player_does_not_exist")
+        {:reply, {:error, :player_does_not_exist}, state}
+
+      {true, true} ->
+        log("#{observed} #{answer} to be observed by #{observer} - :ok")
+
+        new_notifications_observers =
+          Enum.map(get_in(game_state, [:notifications, :observers]), fn
+            {^observer, ^observed, "pending"} -> {observer, observed, answer}
+            {^observer, ^observed, "accepted"} -> {observer, observed, answer}
+            tuple -> tuple
+          end)
+
+        new_game_state = put_in(game_state, [:notifications, :observers], new_notifications_observers)
+        new_state = %{state | game_state: new_game_state}
+
+        each_in_list(players, observers, fn {_, %{pid: p}} ->
+          Actors.Player.game_state_update(p, %{new_game_state: new_game_state})
+        end)
+
+        {:reply, {:ok, new_state}, new_state}
+    end
+  end
+
+  @impl true
   def handle_call({@observer_leave, name}, _from, %{game_state: game_state} = state) do
     observers = game_state[:observers]
 
@@ -284,9 +377,15 @@ defmodule Actors.NewTableManager do
       new_observers = Map.delete(observers, name)
       new_game_state = %{game_state | observers: new_observers}
 
-      {:reply, {:ok}, %{state | game_state: new_game_state}}
+      final_game_state =
+        update_in(new_game_state, [:notifications, :observers], fn list ->
+          # Filter out existing notifications
+          Enum.reject(list, fn {existing_observer, _, _} -> existing_observer == name end)
+        end)
+
+      {:reply, {:ok}, %{state | game_state: final_game_state}}
     else
-      {:reply, {:error, Actors.NewTableManager.Messages.observe_leave_error(name)}}
+      {:reply, {:error, Actors.NewTableManager.Messages.observe_leave_error(name)}, state}
     end
   end
 
@@ -294,7 +393,14 @@ defmodule Actors.NewTableManager do
   @impl true
   def handle_cast(
         {{@choice, name, card}, @wrapper_inner},
-        %{uuid: uuid, timers_shutdown_due_to_inactivity: timers_shutdown_due_to_inactivity, current_turn: current_turn, game_dealer_index: game_dealer_index, game_state: game_state, behavior: :game} =
+        %{
+          uuid: uuid,
+          timers_shutdown_due_to_inactivity: timers_shutdown_due_to_inactivity,
+          current_turn: current_turn,
+          game_dealer_index: game_dealer_index,
+          game_state: game_state,
+          behavior: :game
+        } =
           state
       ) do
     log("#{name} choice: #{card[:key]}")
@@ -304,7 +410,7 @@ defmodule Actors.NewTableManager do
     observers = game_state[:observers]
     new_current_turn = [{name, card} | current_turn]
     new_used_card_count = used_card_count + 1
-
+    notifications = game_state[:notifications]
     cards = game_state[:players][name][:cards]
 
     curr_card = game_state[:players][name][:cards][String.to_atom(card[:key])]
@@ -472,14 +578,17 @@ defmodule Actors.NewTableManager do
                 |> Enum.to_list()
                 |> Enum.each(fn {n, _} -> Actors.Persistence.Stats.record_game(n, new_players_with_leaderboard) end)
 
-                end_game_state = end_game_init_state(uuid, timers_shutdown_due_to_inactivity, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+                end_game_state =
+                  end_game_init_state(uuid, timers_shutdown_due_to_inactivity, notifications, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
 
               false ->
                 new_game_dealer_index = rem(game_dealer_index + 1, 3)
-                end_game_state = end_game_init_state(uuid, timers_shutdown_due_to_inactivity, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
+
+                end_game_state =
+                  end_game_init_state(uuid, timers_shutdown_due_to_inactivity, notifications, new_used_card_count, there_is_a_looser, new_game_dealer_index, new_players_with_leaderboard, observers)
 
                 # RETURN
                 {:noreply, end_game_state}
@@ -771,6 +880,27 @@ defmodule Actors.NewTableManager do
     end
   end
 
+  def ask_to_observe_someone(mode, name, observed) do
+    case mode do
+      {:uuid, uuid} -> GenServer.call({:global, uuid}, {@ask_to_observe, name, observed})
+      {:pid, pid} -> GenServer.call(pid, {@ask_to_observe, name, observed})
+    end
+  end
+
+  def accept_to__be_observed_by_someone(mode, name, observer) do
+    case mode do
+      {:uuid, uuid} -> GenServer.call({:global, uuid}, {@answer_to_be_observed, name, observer, "accepted"})
+      {:pid, pid} -> GenServer.call(pid, {@answer_to_be_observed, name, observer, "accepted"})
+    end
+  end
+
+  def reject_to__be_observed_by_someone(mode, name, observer) do
+    case mode do
+      {:uuid, uuid} -> GenServer.call({:global, uuid}, {@answer_to_be_observed, name, observer, "rejected"})
+      {:pid, pid} -> GenServer.call(pid, {@answer_to_be_observed, name, observer, "rejected"})
+    end
+  end
+
   def observer_leave(mode, name) do
     case mode do
       {:uuid, uuid} -> GenServer.call({:global, uuid}, {@observer_leave, name})
@@ -801,7 +931,7 @@ defmodule Actors.NewTableManager do
       # 5 mins
       [] -> 5 * 60 * 1000
       # 1 sec
-      _ -> 1000
+      _ -> 2000
     end
   end
 end

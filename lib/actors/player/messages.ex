@@ -12,4 +12,6 @@ defmodule Actors.Player.Messages do
   def my_cards_was(cards), do: "My cards:\n" <> cards
 
   def card_already_shared, do: "Card already shared!"
+
+  def invalid_input, do: "Invalid input\n"
 end

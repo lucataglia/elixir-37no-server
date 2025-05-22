@@ -54,22 +54,6 @@ defmodule Utils.Regex do
     end
   end
 
-  def check_player_name(name) do
-    cond do
-      String.length(name) < 3 ->
-        {:error, :too_short}
-
-      String.length(name) > 10 ->
-        {:error, :too_long}
-
-      name =~ ~r/^[[:alnum:]]+$/ ->
-        :ok
-
-      true ->
-        {:error, :invalid_chars}
-    end
-  end
-
   def check_end_game_input(recv) do
     case String.downcase(recv) do
       "share" ->
@@ -98,6 +82,21 @@ defmodule Utils.Regex do
         {:share}
 
       _ ->
+        {:error, :invalid_input}
+    end
+  end
+
+  def check_observe_a_player(recv) do
+    cond do
+      String.downcase(recv) =~ ~r/^observe [A-Za-z]{3,10}$/ ->
+        [_, name] = String.split(recv, " ")
+        {:ok, name}
+
+      String.downcase(recv) =~ ~r/^obs [A-Za-z]{3,10}$/ ->
+        [_, name] = String.split(recv, " ")
+        {:ok, name}
+
+      true ->
         {:error, :invalid_input}
     end
   end

@@ -69,6 +69,13 @@ defmodule Actors.Player do
 
         {:stop, reason, state}
 
+      :observer ->
+        log(name, "behavior #{behavior} - NewTableManager.player_left_the_game")
+
+        Actors.NewTableManager.observer_leave({:pid, table_manager_pid}, name)
+
+        {:stop, reason, state}
+
       _ ->
         log(name, "behavior #{behavior} - NewTableManager.player_left_the_game")
 
@@ -107,6 +114,21 @@ defmodule Actors.Player do
 
   # *** ENDPRINT MESSAGES
 
+  # BACK
+  @impl true
+  def handle_cast({@recv, "back"}, %{name: n, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
+    log(n, "back")
+
+    case behavior do
+      :observer -> Actors.NewTableManager.observer_leave({:pid, table_manager_pid}, n)
+      _ -> Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, n)
+    end
+
+    {:stop, {:shutdown, :player_shutdown_left_the_game}, state}
+  end
+
+  # *** END BACK
+
   @impl true
   def handle_info(@broadcast_i_am_thinking_deeply, %{name: n, table_manager_pid: table_manager_pid} = state) do
     msg = Actors.Player.Messages.i_am_thinking_deeply(n)
@@ -117,7 +139,9 @@ defmodule Actors.Player do
 
   # GAME STATE UPDATE (e.g. some player exit the game)
   @impl true
-  def handle_cast({@game_state_update, new_game_state, piggyback}, state) do
+  def handle_cast({@game_state_update, new_game_state, piggyback}, %{name: n, behavior: behavior} = state) do
+    log(n, "game_state_update - #{behavior}")
+
     print_table(self(), Utils.Colors.with_yellow(piggyback))
 
     {:noreply, %{state | game_state: new_game_state}}
@@ -175,15 +199,6 @@ defmodule Actors.Player do
     {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :better}}
   end
 
-  @impl true
-  def handle_cast({@recv, "back"}, %{name: n, table_manager_pid: table_manager_pid} = state) do
-    log(n, "back")
-
-    Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, n)
-
-    {:stop, {:shutdown, :player_shutdown_left_the_game}, state}
-  end
-
   # STATE - INIT (behavior is :dealer or :better)
   @impl true
   def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, lobby_pid: lobby_pid} = state) do
@@ -205,63 +220,72 @@ defmodule Actors.Player do
     {:noreply, %{state | intervals: %{i_am_thinking_deeply: ref}, table_manager_pid: table_manager_pid, behavior: behavior, game_state: game_state}}
   end
 
-  # STATE - DEALER
+  # RECV
   @impl true
-  def handle_cast(
-        {@recv, data},
-        %{intervals: %{i_am_thinking_deeply: ref_i_am_thinking_deeply}, game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
-      ) do
-    log(name, "recv: #{data}")
+  def handle_cast({@recv, data}, %{name: n, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
+    log(n, "#{data} #{behavior}")
 
-    case Utils.Regex.check_is_valid_card_key(data) do
-      {:error, :invalid_input} ->
-        piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-        print_table(self(), piggyback)
+    cond do
+      String.downcase(data) =~ ~r/^obs yes [A-Za-z]{3,10}$/ ->
+        [_, _, observer] = String.split(data, " ")
 
-        {:noreply, state}
+        case Actors.NewTableManager.accept_to__be_observed_by_someone({:pid, table_manager_pid}, n, observer) do
+          {:error, :he_is_not_an_observer} ->
+            warning_message(self(), ":he_is_not_an_observer")
+            {:noreply, state}
 
-      :ok ->
-        turn_first_card = game_state[:turn_first_card]
+          {:error, :player_does_not_exist} ->
+            warning_message(self(), ":player_does_not_exist")
+            {:noreply, state}
 
-        cards = game_state[:players][name][:cards]
-        choice = deck[String.to_atom(data)]
+          {:error, :that_players_did_not_ask_to_observe} ->
+            warning_message(self(), ":that_players_did_not_ask_to_observe")
+            {:noreply, state}
 
-        if choice do
-          if Map.has_key?(cards, String.to_atom(data)) do
-            case Deck.check_card_is_valid(data, cards, turn_first_card) do
-              :ok ->
-                :timer.cancel(ref_i_am_thinking_deeply)
-                Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, choice)
-
-              {:ok, :change_ranking} ->
-                :timer.cancel(ref_i_am_thinking_deeply)
-                Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, %{choice | ranking: 0})
-
-              {:error, :wrong_suit} ->
-                piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-                print_table(self(), piggyback)
-
-              {:error, :card_already_used} ->
-                piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
-                print_table(self(), piggyback)
-
-              {:error, :invalid_input} ->
-                piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-                print_table(self(), piggyback)
-            end
-          else
-            piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
-            print_table(self(), piggyback)
-          end
-        else
-          piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-          print_table(self(), piggyback)
+          {:ok, _new_state} ->
+            # TableManager will notify everyone with game_state_update
+            {:noreply, state}
         end
 
-        {:noreply, state}
+      String.downcase(data) =~ ~r/^obs no [A-Za-z]{3,10}$/ ->
+        [_, _, observer] = String.split(data, " ")
+
+        case Actors.NewTableManager.reject_to__be_observed_by_someone({:pid, table_manager_pid}, n, observer) do
+          {:error, :he_is_not_an_observer} ->
+            warning_message(self(), ":he_is_not_an_observer")
+            {:noreply, state}
+
+          {:error, :player_does_not_exist} ->
+            warning_message(self(), ":player_does_not_exist")
+            {:noreply, state}
+
+          {:error, :that_players_did_not_ask_to_observe} ->
+            warning_message(self(), ":that_players_did_not_ask_to_observe")
+            {:noreply, state}
+
+          {:ok, _new_state} ->
+            # TableManager will notify everyone with game_state_update
+            {:noreply, state}
+        end
+
+      behavior == :observer ->
+        observer_behavior(data, state)
+
+      behavior == :dealer ->
+        dealer_behavior(data, state)
+
+      behavior == :better ->
+        better_behavior(data, state)
+
+      behavior == :end_game ->
+        end_game_behavior(data, state)
+
+      behavior == :ready_to_replay ->
+        ready_to_replay_behavior(data, state)
     end
   end
 
+  # STATE - DEALER
   @impl true
   def handle_cast({@dealer, game_state}, %{behavior: :dealer} = state) do
     print_table(self())
@@ -277,80 +301,6 @@ defmodule Actors.Player do
   end
 
   # STATE - BETTER
-  @impl true
-  def handle_cast({@recv, data}, %{name: name, game_state: game_state, deck: deck, behavior: :better} = state) do
-    turn_first_card = game_state[:turn_first_card]
-
-    new_state =
-      if turn_first_card == nil do
-        warning_message(self(), Messages.wait_your_turn())
-
-        state
-      else
-        case Utils.Regex.check_is_valid_card_key(data) do
-          {:error, :invalid_input} ->
-            piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-            print_table(self(), piggyback)
-
-            state
-
-          :ok ->
-            turn_first_card = game_state[:turn_first_card]
-
-            cards = game_state[:players][name][:cards]
-            choice = deck[String.to_atom(data)]
-
-            if choice do
-              if Map.has_key?(cards, String.to_atom(data)) do
-                case Deck.check_card_is_valid(data, cards, turn_first_card) do
-                  :ok ->
-                    log(name, "stash: #{inspect(choice.key)}")
-
-                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
-                    %{state | stash: choice.key}
-
-                  {:ok, :change_ranking} ->
-                    log(name, "stash: #{inspect(choice.key)}")
-
-                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
-                    %{state | stash: choice.key}
-
-                  {:error, :wrong_suit} ->
-                    piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-                    print_table(self(), piggyback)
-
-                    state
-
-                  {:error, :card_already_used} ->
-                    piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
-                    print_table(self(), piggyback)
-
-                    state
-
-                  {:error, :invalid_input} ->
-                    piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-                    print_table(self(), piggyback)
-
-                    state
-                end
-              else
-                piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
-                print_table(self(), piggyback)
-
-                state
-              end
-            else
-              piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-              print_table(self(), piggyback)
-
-              state
-            end
-        end
-      end
-
-    {:noreply, new_state}
-  end
-
   @impl true
   def handle_cast({@dealer, game_state}, %{name: n, stash: s, behavior: :better} = state) do
     print_table(self())
@@ -383,51 +333,7 @@ defmodule Actors.Player do
     {:noreply, %{state | game_state: game_state, behavior: :end_game}}
   end
 
-  @impl true
-  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
-    case Utils.Regex.check_end_game_input(data) do
-      {:share} ->
-        case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
-          {:ok} ->
-            {:noreply, state}
-
-          {:error, :already_shared} ->
-            warning_message(self(), Actors.Player.Messages.card_already_shared())
-            {:noreply, state}
-        end
-
-      {:replay} ->
-        Actors.NewTableManager.replay({:pid, table_manager_pid}, name)
-        {:noreply, %{state | behavior: :ready_to_replay}}
-
-      {:error, :invalid_input} ->
-        warning_message(self(), Messages.end_game_invalid_input())
-        {:noreply, state}
-    end
-  end
-
   # STATE - READY TO REPLY
-  @impl true
-  def handle_cast({@recv, data}, %{name: name, table_manager_pid: table_manager_pid, behavior: :ready_to_replay} = state) do
-    case Utils.Regex.check_end_game_input_ready_to_replay(data) do
-      {:share} ->
-        case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
-          {:ok} ->
-            {:noreply, state}
-
-          {:error, :already_shared} ->
-            warning_message(self(), Actors.Player.Messages.card_already_shared())
-            {:noreply, state}
-        end
-
-      {:error, :invalid_input} ->
-        warning_message(self(), Messages.end_game_invalid_input())
-        {:noreply, state}
-    end
-
-    {:noreply, state}
-  end
-
   @impl true
   def handle_cast({@dealer, game_state}, %{behavior: :ready_to_replay} = state) do
     print_table(self())
@@ -444,8 +350,8 @@ defmodule Actors.Player do
 
   # DEGUB that march everything
   @impl true
-  def handle_cast({x, _}, %{name: n} = state) do
-    log(n, "Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+  def handle_cast(envelop, %{name: n} = state) do
+    log_debug(n, "Receiced: " <> inspect(envelop) <> " - Behavior: " <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -554,5 +460,220 @@ defmodule Actors.Player do
   # *** private api
   defp log(n, msg) do
     IO.puts("#{Colors.with_light_magenta("Player")} #{Colors.with_underline(n)} #{msg}")
+  end
+
+  defp log_debug(n, msg) do
+    IO.puts("#{Colors.with_red_bright("Player (DEBUG)")} #{n}: #{msg}")
+  end
+
+  defp observer_behavior(data, %{name: n, table_manager_pid: table_manager_pid, behavior: :observer} = state) do
+    log(n, "Observe other player")
+
+    case Utils.Regex.check_observe_a_player(data) do
+      {:ok, observed} ->
+        log(n, "Observe other player: #{observed}")
+
+        case Actors.NewTableManager.ask_to_observe_someone({:pid, table_manager_pid}, n, observed) do
+          {:error, :you_are_not_an_observer} ->
+            warning_message(self(), "Something went wrong: You are not an observer\n")
+            {:noreply, state}
+
+          {:error, :player_does_not_exist} ->
+            warning_message(self(), "Player #{observed} does not exist in this table\n")
+            {:noreply, state}
+
+          {:error, :you_already_ask_that_player} ->
+            warning_message(self(), "Request already exist or previously rejected or accepted: obs #{observed}\n")
+            {:noreply, state}
+
+          {:ok, _new_state} ->
+            # TableManager will notify everyone with game_state_update
+            {:noreply, state}
+        end
+
+      {:error, :invalid_input} ->
+        log(n, "Observe other player: invalid_input")
+        warning_message(self(), Actors.Player.Messages.invalid_input())
+
+        {:noreply, state}
+    end
+  end
+
+  defp dealer_behavior(
+         data,
+         %{intervals: %{i_am_thinking_deeply: ref_i_am_thinking_deeply}, game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
+       ) do
+    log(name, "dealer_behavior - recv: #{data}")
+
+    case Utils.Regex.check_is_valid_card_key(data) do
+      {:error, :invalid_input} ->
+        piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+        print_table(self(), piggyback)
+
+        {:noreply, state}
+
+      :ok ->
+        turn_first_card = game_state[:turn_first_card]
+
+        cards = game_state[:players][name][:cards]
+        choice = deck[String.to_atom(data)]
+
+        if choice do
+          if Map.has_key?(cards, String.to_atom(data)) do
+            case Deck.check_card_is_valid(data, cards, turn_first_card) do
+              :ok ->
+                :timer.cancel(ref_i_am_thinking_deeply)
+                Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, choice)
+
+              {:ok, :change_ranking} ->
+                :timer.cancel(ref_i_am_thinking_deeply)
+                Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, %{choice | ranking: 0})
+
+              {:error, :wrong_suit} ->
+                piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
+                print_table(self(), piggyback)
+
+              {:error, :card_already_used} ->
+                piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
+                print_table(self(), piggyback)
+
+              {:error, :invalid_input} ->
+                piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+                print_table(self(), piggyback)
+            end
+          else
+            piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
+            print_table(self(), piggyback)
+          end
+        else
+          piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+          print_table(self(), piggyback)
+        end
+
+        {:noreply, state}
+    end
+  end
+
+  defp better_behavior(data, %{name: name, game_state: game_state, deck: deck, behavior: :better} = state) do
+    log(name, " better: #{data}")
+
+    turn_first_card = game_state[:turn_first_card]
+
+    new_state =
+      if turn_first_card == nil do
+        warning_message(self(), Messages.wait_your_turn())
+
+        state
+      else
+        case Utils.Regex.check_is_valid_card_key(data) do
+          {:error, :invalid_input} ->
+            piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+            print_table(self(), piggyback)
+
+            state
+
+          :ok ->
+            turn_first_card = game_state[:turn_first_card]
+
+            cards = game_state[:players][name][:cards]
+            choice = deck[String.to_atom(data)]
+
+            if choice do
+              if Map.has_key?(cards, String.to_atom(data)) do
+                case Deck.check_card_is_valid(data, cards, turn_first_card) do
+                  :ok ->
+                    log(name, "stash: #{inspect(choice.key)}")
+
+                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
+                    %{state | stash: choice.key}
+
+                  {:ok, :change_ranking} ->
+                    log(name, "stash: #{inspect(choice.key)}")
+
+                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
+                    %{state | stash: choice.key}
+
+                  {:error, :wrong_suit} ->
+                    piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
+                    print_table(self(), piggyback)
+
+                    state
+
+                  {:error, :card_already_used} ->
+                    piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
+                    print_table(self(), piggyback)
+
+                    state
+
+                  {:error, :invalid_input} ->
+                    piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+                    print_table(self(), piggyback)
+
+                    state
+                end
+              else
+                piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
+                print_table(self(), piggyback)
+
+                state
+              end
+            else
+              piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+              print_table(self(), piggyback)
+
+              state
+            end
+        end
+      end
+
+    {:noreply, new_state}
+  end
+
+  @impl true
+  defp end_game_behavior(data, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
+    log(name, "end_game: #{data}")
+
+    case Utils.Regex.check_end_game_input(data) do
+      {:share} ->
+        case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
+          {:ok} ->
+            {:noreply, state}
+
+          {:error, :already_shared} ->
+            warning_message(self(), Actors.Player.Messages.card_already_shared())
+            {:noreply, state}
+        end
+
+      {:replay} ->
+        Actors.NewTableManager.replay({:pid, table_manager_pid}, name)
+        {:noreply, %{state | behavior: :ready_to_replay}}
+
+      {:error, :invalid_input} ->
+        warning_message(self(), Messages.end_game_invalid_input())
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  defp ready_to_replay_behavior(data, %{name: name, table_manager_pid: table_manager_pid, behavior: :ready_to_replay} = state) do
+    log(name, "ready_to_replay: #{data}")
+
+    case Utils.Regex.check_end_game_input_ready_to_replay(data) do
+      {:share} ->
+        case Actors.NewTableManager.share({:pid, table_manager_pid}, name) do
+          {:ok} ->
+            {:noreply, state}
+
+          {:error, :already_shared} ->
+            warning_message(self(), Actors.Player.Messages.card_already_shared())
+            {:noreply, state}
+        end
+
+      {:error, :invalid_input} ->
+        warning_message(self(), Messages.end_game_invalid_input())
+        {:noreply, state}
+    end
+
+    {:noreply, state}
   end
 end
