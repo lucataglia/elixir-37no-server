@@ -29,9 +29,9 @@ defmodule MyApp.SocketTest do
     {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock4} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
-    pid = spawn_link(fn -> loop(sock3) end)
+    pid = spawn_link(fn -> loop(sock4) end)
 
-    TCP.controlling_process(sock3, pid)
+    TCP.controlling_process(sock4, pid)
 
     sign_in(sock1)
     sign_in(sock2)
@@ -298,15 +298,87 @@ defmodule MyApp.SocketTest do
 
     replay(sock1)
     replay(sock2)
-    # replay(sock3)
+    replay(sock3)
 
-    # back(sock3)
-    # open_tables(sock3)
+    back(sock3)
+    open_tables(sock3)
 
-    # exit_fn(sock1)
+    back(sock1)
     # exit_fn(sock2)
     # Optionally wait for processing (if asynchronous)
-    Process.sleep(10000)
+    Process.sleep(3000)
+
+    opt_in(sock1)
+    opt_in(sock3)
+    opt_in(sock2)
+
+    # # Optionally wait for processing (if asynchronous)
+    Process.sleep(100)
+
+    all_open_tables(sock4)
+    observe_table(sock4, "123e4567-e89b-4a3c-8f12-123456789abc")
+
+    play_card(sock3, "7h")
+    play_card(sock1, "4h")
+    stash_card(sock3, "7h")
+    play_card(sock2, "5h")
+
+    play_card(sock3, "as")
+    play_card(sock1, "3s")
+    play_card(sock2, "ks")
+
+    play_card(sock1, "jd")
+    play_card(sock2, "ad")
+    play_card(sock3, "kd")
+
+    play_card(sock2, "7d")
+    play_card(sock3, "3d")
+    play_card(sock1, "6d")
+
+    play_card(sock3, "qd")
+    play_card(sock1, "4d")
+    play_card(sock2, "5d")
+
+    play_card(sock3, "2d")
+    play_card(sock1, "ac")
+    play_card(sock2, "jh")
+
+    play_card(sock3, "5c")
+    play_card(sock1, "3h")
+    play_card(sock2, "7c")
+
+    play_card(sock2, "5s")
+    play_card(sock3, "3c")
+    play_card(sock1, "6s")
+
+    play_card(sock1, "7s")
+    play_card(sock2, "2s")
+    play_card(sock3, "2c")
+
+    play_card(sock2, "4c")
+    play_card(sock3, "kc")
+    play_card(sock1, "2h")
+
+    play_card(sock3, "ah")
+    play_card(sock1, "kh")
+    play_card(sock2, "qs")
+
+    play_card(sock3, "qc")
+    play_card(sock1, "qh")
+    play_card(sock2, "6c")
+
+    play_card(sock3, "jc")
+    play_card(sock1, "6h")
+    play_card(sock2, "js")
+
+    share(sock1)
+    share(sock2)
+    share(sock3)
+
+    replay(sock1)
+    replay(sock2)
+
+    Process.sleep(3000)
 
     # Add assertions here based on expected server responses
     # Example: assert_response(sock1, "Welcome message")

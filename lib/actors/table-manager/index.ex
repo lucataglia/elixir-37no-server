@@ -8,9 +8,6 @@ defmodule Actors.NewTableManager do
 
   use GenServer
 
-  # 5 mins
-  @timer_inactivity 5 * 60 * 1000
-
   @broadcast_warning :broadcast_warning
   @choice :choice
   @observer_leave :observer_leave
@@ -143,7 +140,7 @@ defmodule Actors.NewTableManager do
         log("Wrapper #{inspect(ref)} clear timer: #{millis_left}")
     end
 
-    new_ref = Process.send_after(self(), @shutdown_due_to_inactivity, @timer_inactivity)
+    new_ref = Process.send_after(self(), @shutdown_due_to_inactivity, timer_inactivity())
 
     GenServer.cast(self(), {msg, @wrapper_inner})
 
@@ -155,14 +152,18 @@ defmodule Actors.NewTableManager do
     log("broadcast_warning #{msg}")
 
     players = game_state[:players]
+    observers = game_state[:observers]
 
-    Enum.to_list(players)
-    |> Enum.each(fn {_, %{pid: p}} ->
-      Actors.Player.warning_message(
-        p,
-        msg
-      )
-    end)
+    each_in_list(
+      players,
+      observers,
+      fn {_, %{pid: p}} ->
+        Actors.Player.warning_message(
+          p,
+          msg
+        )
+      end
+    )
 
     {:noreply, state}
   end
@@ -186,13 +187,17 @@ defmodule Actors.NewTableManager do
     else
       new_game_state = %{game_state | players: new_players}
 
-      Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p}} ->
-        Actors.Player.game_state_update(
-          p,
-          %{new_game_state: new_game_state},
-          Actors.NewTableManager.Messages.player_left_the_game(name)
-        )
-      end)
+      each_in_list(
+        game_state[:players],
+        game_state[:observers],
+        fn {_, %{pid: p}} ->
+          Actors.Player.game_state_update(
+            p,
+            %{new_game_state: new_game_state},
+            Actors.NewTableManager.Messages.player_left_the_game(name)
+          )
+        end
+      )
 
       {:noreply, %{state | game_state: new_game_state}}
     end
@@ -218,13 +223,17 @@ defmodule Actors.NewTableManager do
       }
     )
 
-    Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-      Actors.Player.game_state_update(
-        p,
-        %{new_game_state: new_game_state},
-        Actors.NewTableManager.Messages.player_rejoined_the_game(name)
-      )
-    end)
+    each_in_list(
+      players,
+      game_state[:observers],
+      fn {_, %{pid: p}} ->
+        Actors.Player.game_state_update(
+          p,
+          %{new_game_state: new_game_state},
+          Actors.NewTableManager.Messages.player_rejoined_the_game(name)
+        )
+      end
+    )
 
     {:noreply, %{state | game_state: new_game_state}}
   end
@@ -233,12 +242,32 @@ defmodule Actors.NewTableManager do
   @impl true
   def handle_cast({{@player_observe, name, pid}, @wrapper_inner}, %{game_state: game_state} = state) do
     observers = game_state[:observers]
-    new_observers = Map.put(observers, name, pid)
+
+    # Create a fake player for the observer
+    new_observers =
+      Map.put(
+        observers,
+        name,
+        %{
+          pid: pid,
+          name: name,
+          points: 0,
+          index: -1,
+          current: nil,
+          leaderboard: [],
+          stack: [],
+          cards: %{},
+          is_looser: false,
+          is_stopped: false
+        }
+      )
+
     new_game_state = %{game_state | observers: new_observers}
 
     Actors.Player.join_as_observer(
       pid,
       %{
+        table_manager_pid: self(),
         new_game_state: new_game_state,
         piggyback: Actors.NewTableManager.Messages.observe_success()
       }
@@ -414,17 +443,21 @@ defmodule Actors.NewTableManager do
             new_game_state_with_leaderboard = %{new_game_state | there_is_a_looser: there_is_a_looser, dealer_index: nil, players: new_players_with_leaderboard}
 
             # Tells :end_game to the players
-            new_players_with_leaderboard
-            |> Enum.to_list()
-            |> Enum.each(fn {_, %{pid: p}} -> Actors.Player.end_game(p, %{new_game_state: new_game_state_with_leaderboard}) end)
+            each_in_list(
+              new_players_with_leaderboard,
+              %{},
+              fn {_, %{pid: p}} ->
+                Actors.Player.end_game(p, %{new_game_state: new_game_state_with_leaderboard})
+              end
+            )
 
-            Enum.to_list(observers)
-            |> Enum.each(fn {_, pid} ->
-              Actors.Player.game_state_update(
-                pid,
-                %{new_game_state: new_game_state}
-              )
-            end)
+            each_in_list(
+              %{},
+              observers,
+              fn {_, %{pid: pid}} ->
+                Actors.Player.game_state_update(pid, %{new_game_state: new_game_state_with_leaderboard})
+              end
+            )
 
             case there_is_a_looser do
               true ->
@@ -455,23 +488,30 @@ defmodule Actors.NewTableManager do
           # GAME NOT ENDED
           true ->
             # Tells who is the new dealer
-            Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
-              cond do
-                new_game_state[:dealer_index] == i ->
-                  Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
+            each_in_list(
+              game_state[:players],
+              %{},
+              fn {_, %{pid: p, index: i}} ->
+                cond do
+                  new_game_state[:dealer_index] == i ->
+                    Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
 
-                true ->
-                  Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
+                  true ->
+                    Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
+                end
               end
-            end)
+            )
 
-            Enum.to_list(observers)
-            |> Enum.each(fn {_, pid} ->
-              Actors.Player.game_state_update(
-                pid,
-                %{new_game_state: new_game_state}
-              )
-            end)
+            each_in_list(
+              %{},
+              observers,
+              fn {_, %{pid: p}} ->
+                Actors.Player.game_state_update(
+                  p,
+                  %{new_game_state: new_game_state}
+                )
+              end
+            )
 
             # RETURN
             {:noreply, %{state | game_state: new_game_state, current_turn: []}}
@@ -496,15 +536,30 @@ defmodule Actors.NewTableManager do
         }
 
         # Tells who is the new dealer
-        Enum.each(Enum.to_list(game_state[:players]), fn {_, %{pid: p, index: i}} ->
-          cond do
-            new_game_state[:dealer_index] == i ->
-              Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
+        each_in_list(
+          game_state[:players],
+          %{},
+          fn {_, %{pid: p, index: i}} ->
+            cond do
+              new_game_state[:dealer_index] == i ->
+                Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
 
-            true ->
-              Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
+              true ->
+                Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
+            end
           end
-        end)
+        )
+
+        each_in_list(
+          %{},
+          game_state[:observers],
+          fn {_, %{pid: p}} ->
+            Actors.Player.game_state_update(
+              p,
+              %{new_game_state: new_game_state}
+            )
+          end
+        )
 
         # RETURN
         {:noreply, %{state | game_state: new_game_state, current_turn: new_current_turn}}
@@ -522,16 +577,19 @@ defmodule Actors.NewTableManager do
       {:reply, {:error, :already_shared}, state}
     else
       players = game_state[:players]
+      observers = game_state[:observers]
 
       new_share_names = [name | share_names]
       new_game_state = %{game_state | end_game: %{end_game | share_names: new_share_names}}
       new_state = %{state | game_state: new_game_state}
 
-      players
-      |> Enum.to_list()
-      |> Enum.each(fn {_, %{pid: pid}} ->
-        Actors.Player.game_state_update(pid, %{new_game_state: new_game_state})
-      end)
+      each_in_list(
+        players,
+        observers,
+        fn {_, %{pid: pid}} ->
+          Actors.Player.game_state_update(pid, %{new_game_state: new_game_state})
+        end
+      )
 
       {:reply, {:ok}, new_state}
     end
@@ -593,34 +651,37 @@ defmodule Actors.NewTableManager do
         }
 
         # Inform who is the DEALER and who is the BETTER
-        Enum.each(Enum.to_list(new_init_players), fn {_, %{pid: p, index: i}} ->
-          cond do
-            i == game_dealer_index -> Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
-            i != game_dealer_index -> Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
+        each_in_list(
+          new_init_players,
+          %{},
+          fn {_, %{pid: p, index: i}} ->
+            cond do
+              i == game_dealer_index -> Actors.Player.you_are_the_dealer(p, %{new_game_state: new_game_state})
+              i != game_dealer_index -> Actors.Player.you_are_the_better(p, %{new_game_state: new_game_state})
+            end
           end
-        end)
+        )
 
-        Enum.to_list(observers)
-        |> Enum.each(fn {_, pid} ->
-          Actors.Player.game_state_update(
-            pid,
-            %{new_game_state: new_game_state}
-          )
-        end)
+        each_in_list(
+          %{},
+          observers,
+          fn {_, %{pid: pid}} ->
+            Actors.Player.game_state_update(pid, %{new_game_state: new_game_state})
+          end
+        )
 
         {:noreply, %{state | game_state: new_game_state, behavior: :game}}
 
       _ ->
         new_game_state = %{game_state | end_game: %{end_game | replay_names: new_replay_names}}
 
-        Enum.each(Enum.to_list(players), fn {_, %{pid: p}} ->
-          Actors.Player.game_state_update(p, %{new_game_state: new_game_state})
-        end)
-
-        Enum.to_list(observers)
-        |> Enum.each(fn {_, pid} ->
-          Actors.Player.game_state_update(pid, %{new_game_state: new_game_state})
-        end)
+        each_in_list(
+          players,
+          observers,
+          fn {_, %{pid: pid}} ->
+            Actors.Player.game_state_update(pid, %{new_game_state: new_game_state})
+          end
+        )
 
         {:noreply, %{state | game_state: new_game_state}}
     end
@@ -729,9 +790,18 @@ defmodule Actors.NewTableManager do
     IO.puts("#{Colors.with_yellow_bright("TableManager")} #{msg}")
   end
 
-  defp each_in_list(enum, fun) when is_function(fun, 1) do
-    enum
+  defp each_in_list(players, observers, fun) when is_function(fun, 1) do
+    Map.merge(players, observers)
     |> Enum.to_list()
     |> Enum.each(fun)
+  end
+
+  defp timer_inactivity do
+    case System.argv() do
+      # 5 mins
+      [] -> 5 * 60 * 1000
+      # 1 sec
+      _ -> 1000
+    end
   end
 end

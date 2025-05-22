@@ -75,8 +75,8 @@ defmodule Actors.Lobby do
   end
 
   @impl true
-  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}} = reason}, %{client: client, name: name, bridge_pid: bridge_pid}) do
-    log(name, ":DOWN Player #{inspect(pid)} table #{inspect(uuid)} closed due to inactivity #{inspect(reason)}")
+  def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}} = reason}, %{client: client, name: name, bridge_pid: bridge_pid, behavior: behavior}) do
+    log(name, ":DOWN Player #{inspect(pid)} table #{inspect(uuid)} closed due to inactivity #{inspect(reason)} #{inspect(behavior)}")
 
     warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: Actors.Lobby.Messages.table_maanger_stopped_due_to_inactivity())
 

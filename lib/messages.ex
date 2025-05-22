@@ -330,19 +330,15 @@ defmodule Messages do
         end
       )
 
-    # IO.ANSI.format([:cyan, "  ┌──────────────────┐")
-    # IO.ANSI.format([:cyan, "  │ It's your turn!  │")
-    # IO.ANSI.format([:cyan, "  └──────────────────┘")
-    # IO.ANSI.format([:cyan, "     ➤"))
-    owl_line_one_______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "┌──────────────────┐"]), else: ""
-    owl_line_two_______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "│ It's your turn!! │"]), else: ""
-    owl_line_three_____ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "└──────────────────┘"]), else: ""
-    owl_line_four______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "        \\"]), else: ""
-    owl_line_five______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         \\"]), else: ""
-    owl_line_six_______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          ,_,"]), else: ""
-    owl_line_seven_____ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (O,O)"]), else: ""
-    owl_line_eight_____ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (   )"]), else: ""
-    owl_line_nine______ = if me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          \" \""]), else: ""
+    owl_line_one_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "┌──────────────────┐"]), else: ""
+    owl_line_two_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "│ It's your turn!! │"]), else: ""
+    owl_line_three_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "└──────────────────┘"]), else: ""
+    owl_line_four______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "        \\"]), else: ""
+    owl_line_five______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         \\"]), else: ""
+    owl_line_six_______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          ,_,"]), else: ""
+    owl_line_seven_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (O,O)"]), else: ""
+    owl_line_eight_____ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "         (   )"]), else: ""
+    owl_line_nine______ = if behavior != :observer && me[:index] == dealer_index, do: IO.ANSI.format([:cyan, "          \" \""]), else: ""
 
     # CARDS
 
@@ -404,15 +400,18 @@ defmodule Messages do
 
     # END GAME
     end_game_message =
-      case used_card_count == Deck.card_count() do
-        true ->
+      cond do
+        behavior == :observer ->
+          ""
+
+        used_card_count == Deck.card_count() ->
           if game_state[:there_is_a_looser] do
             "\n\n\n#{IO.ANSI.format([:yellow, Messages.type_replay_to_start_a_new_game()])}"
           else
             "\n\n\n#{IO.ANSI.format([:yellow, Messages.type_replay_to_play_again()])}"
           end
 
-        false ->
+        true ->
           ""
       end
 
@@ -577,7 +576,7 @@ defmodule Messages do
 
     piggyback_with_leading_new_line =
       if piggyback do
-        "\n#{piggyback}"
+        "\n\n#{piggyback}"
       else
         ""
       end

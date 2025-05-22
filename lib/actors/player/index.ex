@@ -134,12 +134,15 @@ defmodule Actors.Player do
 
   # JOIN AS OBSERVER
   @impl true
-  def handle_cast({@observer, new_game_state, piggyback}, %{lobby_pid: lobby_pid} = state) do
+  def handle_cast({@observer, table_manager_pid, new_game_state, piggyback}, %{name: n, lobby_pid: lobby_pid} = state) do
     Actors.Lobby.game_start(lobby_pid)
+
+    log(n, "monitor" <> inspect(table_manager_pid))
+    Process.monitor(table_manager_pid)
 
     print_table(self(), Utils.Colors.with_yellow(piggyback))
 
-    {:noreply, %{state | game_state: new_game_state, behavior: :observer}}
+    {:noreply, %{state | table_manager_pid: table_manager_pid, game_state: new_game_state, behavior: :observer}}
   end
 
   # REJOIN SUCCESS - as dealer
@@ -497,11 +500,12 @@ defmodule Actors.Player do
 
   def join_as_observer(pid, args) do
     %{
+      table_manager_pid: table_manager_pid,
       new_game_state: new_game_state,
       piggyback: piggyback
     } = args
 
-    GenServer.cast(pid, {@observer, new_game_state, piggyback})
+    GenServer.cast(pid, {@observer, table_manager_pid, new_game_state, piggyback})
   end
 
   def rejoin_success(pid, args) do
