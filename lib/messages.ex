@@ -605,7 +605,7 @@ defmodule Messages do
 
                               #{infoxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
                               #{dividerxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}
-                              #{v}                                   #{dealer_name_blueexxxx}                  #{v}
+                              #{v}                                 #{dealer_name_blueexxxx}                    #{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
                               #{v}#{a}                                                                     #{b}#{v}
@@ -669,20 +669,20 @@ defmodule NotificationTable do
       end)
       |> Enum.map(fn
         {_, observed, "pending"} ->
-          ["🕣 Pending", observed, "Please wait for response"]
+          ["🕣 Pending", "Waiting for a response to your observation request", observed]
 
         {_, observed, "rejected"} ->
-          ["❌ Rejected", observed, "Didn't accept to be observed"]
+          ["❌ Rejected", "The user has denied or revoked permission to observe the game", observed]
 
         {_, observed, "accepted"} ->
-          ["✅ Accepted", observed, "Accept to be observed"]
+          ["✅ Accepted", "The user accepted your request to observe the game", observed]
       end)
 
     if rows == [] do
       ""
     else
       # Create the table with headers
-      "#{Table.new(rows, ["Status", "Observed", "Message"]) |> Table.put_column_meta(0, align: :center) |> Table.render!()}"
+      "\n\n#{Table.new(rows, ["Status", "Message", "Observed"]) |> Table.put_column_meta(0, align: :center) |> Table.render!()}"
     end
   end
 
@@ -696,17 +696,17 @@ defmodule NotificationTable do
       end)
       |> Enum.map(fn
         {observer, _, "pending"} ->
-          ["🕣 Pending", observer, "want to observe your fame"]
+          ["🕣 Pending", "Someone want to observe your game", observer]
 
         {observer, _, "accepted"} ->
-          ["✅ Accepted", observer, "You accept to be observed"]
+          ["✅ Accepted", "You accepted to be observed", observer]
       end)
 
     if rows == [] do
       ""
     else
       # Create the table with headers
-      "\n\n#{Table.new(rows, ["Status", "Observer", "Message"]) |> Table.put_column_meta(0, align: :center) |> Table.render!()}"
+      "\n\n#{Table.new(rows, ["Status", "Message", "Observer"]) |> Table.put_column_meta(0, align: :center) |> Table.render!()}"
     end
   end
 end

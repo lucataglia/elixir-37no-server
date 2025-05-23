@@ -28,6 +28,7 @@ defmodule MyApp.SocketTest do
     {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock4} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+    {:ok, sock5} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
     pid = spawn_link(fn -> loop(sock4) end)
 
@@ -37,6 +38,7 @@ defmodule MyApp.SocketTest do
     sign_in(sock2)
     sign_in(sock3)
     sign_in(sock4)
+    sign_up(sock5)
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
@@ -45,6 +47,7 @@ defmodule MyApp.SocketTest do
     insert_credentials(sock2, "testjoebas")
     insert_credentials(sock3, "testThe")
     insert_credentials(sock4, "testObs")
+    insert_credentials(sock5, "testObsTwo")
 
     # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
@@ -331,71 +334,81 @@ defmodule MyApp.SocketTest do
     Process.sleep(3000)
 
     opt_in(sock1)
-    opt_in(sock3)
     opt_in(sock2)
+    opt_in(sock4)
 
     # # Optionally wait for processing (if asynchronous)
     Process.sleep(100)
 
-    all_open_tables(sock4)
-    observe_table(sock4, "123e4567-e89b-4a3c-8f12-123456789abc")
+    all_open_tables(sock3)
+    all_open_tables(sock5)
+    observe_table(sock3, "123e4567-e89b-4a3c-8f12-123456789abc")
+    observe_table(sock5, "123e4567-e89b-4a3c-8f12-123456789abc")
 
-    play_card(sock3, "7h")
+    play_card(sock4, "7h")
     play_card(sock1, "4h")
-    stash_card(sock3, "7h")
+    stash_card(sock4, "7h")
     play_card(sock2, "5h")
 
-    play_card(sock3, "as")
+    play_card(sock4, "as")
     play_card(sock1, "3s")
     play_card(sock2, "ks")
 
+    observe_player(sock3, "testnoex")
+    observe_player(sock3, "testobs")
+    observe_player(sock5, "testobs")
+
     play_card(sock1, "jd")
     play_card(sock2, "ad")
-    play_card(sock3, "kd")
+    play_card(sock4, "kd")
 
     play_card(sock2, "7d")
-    play_card(sock3, "3d")
+    play_card(sock4, "3d")
     play_card(sock1, "6d")
 
-    play_card(sock3, "qd")
+    play_card(sock4, "qd")
     play_card(sock1, "4d")
     play_card(sock2, "5d")
 
-    play_card(sock3, "2d")
+    accept_to_be_observed(sock4, "testnoex")
+    accept_to_be_observed(sock4, "testthe")
+    accept_to_be_observed(sock4, "testObsTwo")
+
+    play_card(sock4, "2d")
     play_card(sock1, "ac")
     play_card(sock2, "jh")
 
-    play_card(sock3, "5c")
+    play_card(sock4, "5c")
     play_card(sock1, "3h")
     play_card(sock2, "7c")
 
     play_card(sock2, "5s")
-    play_card(sock3, "3c")
+    play_card(sock4, "3c")
     play_card(sock1, "6s")
 
     play_card(sock1, "7s")
     play_card(sock2, "2s")
-    play_card(sock3, "2c")
+    play_card(sock4, "2c")
 
     play_card(sock2, "4c")
-    play_card(sock3, "kc")
+    play_card(sock4, "kc")
     play_card(sock1, "2h")
 
-    play_card(sock3, "ah")
+    play_card(sock4, "ah")
     play_card(sock1, "kh")
     play_card(sock2, "qs")
 
-    play_card(sock3, "qc")
+    play_card(sock4, "qc")
     play_card(sock1, "qh")
     play_card(sock2, "6c")
 
-    play_card(sock3, "jc")
+    play_card(sock4, "jc")
     play_card(sock1, "6h")
     play_card(sock2, "js")
 
     share(sock1)
     share(sock2)
-    share(sock3)
+    share(sock4)
 
     replay(sock1)
     replay(sock2)
@@ -409,6 +422,7 @@ defmodule MyApp.SocketTest do
     TCP.close(sock1)
     TCP.close(sock2)
     TCP.close(sock3)
+    TCP.close(sock4)
   end
 
   defp loop(socket) do

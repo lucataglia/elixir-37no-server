@@ -9,6 +9,7 @@ defmodule Actors.Persistence.Stats do
 
   # Define all GenServer messages as module attributes
   @record_game :record_game
+  @init_player :init_player
   @get_stats :get_stats
 
   # Client API
@@ -29,6 +30,10 @@ defmodule Actors.Persistence.Stats do
 
   def get_stats(username) do
     GenServer.call(__MODULE__, {@get_stats, username})
+  end
+
+  def init_player(username) do
+    GenServer.call(__MODULE__, {@init_player, username})
   end
 
   def record_game(username, players) do
@@ -58,6 +63,30 @@ defmodule Actors.Persistence.Stats do
       end
 
     {:ok, state}
+  end
+
+  # Server Callback addition
+  @impl true
+  def handle_call({@init_player, username}, _from, state) do
+    if Map.has_key?(state, username) do
+      log("Attempted to initialize existing user #{Colors.with_underline(username)}")
+      {:reply, {:error, :already_exists}, state}
+    else
+      default_stats = %{
+        "played" => 0,
+        "won" => 0,
+        "last_game_desc" => "None",
+        # Initialize as integer (will convert to Decimal on first game)
+        "avg" => 0
+      }
+
+      new_state = Map.put(state, username, default_stats)
+      save_to_disk(new_state)
+
+      log("Initialized stats for new user #{Colors.with_underline(username)}")
+
+      {:reply, :ok, new_state}
+    end
   end
 
   @impl true

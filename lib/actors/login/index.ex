@@ -144,7 +144,7 @@ defmodule Actors.Login do
         case Actors.Persistence.Auth.register_user(name, password) do
           # Username is available, insert it
           :ok ->
-            # TODO: hashing the password before writing
+            Actors.Persistence.Stats.init_player(name)
 
             log("User #{name} signed up successfully.")
 

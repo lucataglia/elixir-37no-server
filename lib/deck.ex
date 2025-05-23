@@ -16,7 +16,9 @@ defmodule Deck do
 
   def heart, do: "❤️"
   def diamond, do: "🔷"
-  def clubs, do: "🍀"
+  # def clubs, do: "🍀"
+  def clubs, do: "🧩"
+  # def clubs, do: "☘️"
   def spades, do: "♠️"
 
   def factory do
