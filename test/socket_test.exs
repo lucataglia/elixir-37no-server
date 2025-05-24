@@ -30,9 +30,9 @@ defmodule MyApp.SocketTest do
     {:ok, sock4} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
     {:ok, sock5} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
 
-    pid = spawn_link(fn -> loop(sock4) end)
+    pid = spawn_link(fn -> loop(sock3) end)
 
-    TCP.controlling_process(sock4, pid)
+    TCP.controlling_process(sock3, pid)
 
     sign_in(sock1)
     sign_in(sock2)
@@ -63,11 +63,15 @@ defmodule MyApp.SocketTest do
     observe_table(sock4, "123e4567-e89b-4a3c-8f12-123456789abc")
 
     play_card(sock3, "7h")
-    play_card(sock1, "4h")
+    play_card_really_fast(sock1, "4h")
+    play_card_really_fast(sock1, "4h")
+    play_card_really_fast(sock1, "4h")
+    play_card_really_fast(sock1, "4h")
+    play_card_really_fast(sock1, "4h")
     stash_card(sock3, "7h")
     play_card(sock2, "5h")
 
-    # testjeff accept a user that does not exist
+    # # testjeff accept a user that does not exist
     accept_to_be_observed(sock1, "testnotex")
 
     play_card(sock3, "as")
@@ -415,6 +419,7 @@ defmodule MyApp.SocketTest do
 
     Process.sleep(3000)
 
+    IO.puts(" - - - > TEST END < - - - ")
     # Add assertions here based on expected server responses
     # Example: assert_response(sock1, "Welcome message")
 
@@ -461,6 +466,10 @@ defmodule MyApp.SocketTest do
   defp observe_player(socket, name), do: TCP.send(socket, "observe #{name}\n")
   defp accept_to_be_observed(socket, observer), do: TCP.send(socket, "obs yes #{observer}\n")
   defp reject_to_be_observed(socket, observer), do: TCP.send(socket, "obs no #{observer}\n")
+
+  defp play_card_really_fast(socket, card) do
+    TCP.send(socket, "#{card}\n")
+  end
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")

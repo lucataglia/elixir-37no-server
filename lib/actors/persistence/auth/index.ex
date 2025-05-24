@@ -4,7 +4,6 @@ defmodule Actors.Persistence.Auth do
   """
 
   use GenServer
-  alias Utils.Colors
   alias Bcrypt, as: BCrypt
 
   @json_file "users.json"
@@ -40,10 +39,10 @@ defmodule Actors.Persistence.Auth do
   @impl true
   def handle_call({@register_user, username, password}, _from, users) do
     if Map.has_key?(users, username) do
-      log("register_user user_already_exists")
+      Utils.Log.log("PersistenceAuth", "register_user user_already_exists", &Utils.Colors.with_yellow_and_underline/1)
       {:reply, {:error, :user_already_exists}, users}
     else
-      log("register_user success")
+      Utils.Log.log("PersistenceAuth", "register_user success", &Utils.Colors.with_yellow_and_underline/1)
       hashed_password = BCrypt.hash_pwd_salt(password)
       new_users = Map.put(users, username, hashed_password)
       save_users(new_users)
@@ -53,20 +52,20 @@ defmodule Actors.Persistence.Auth do
 
   @impl true
   def handle_call({@authenticate, username, password}, _from, users) do
-    log("authenticate")
+    Utils.Log.log("PersistenceAuth", "authenticate", &Utils.Colors.with_yellow_and_underline/1)
 
     case Map.fetch(users, username) do
       {:ok, hashed_password} ->
         if BCrypt.verify_pass(password, hashed_password) do
-          log("authenticate success")
+          Utils.Log.log("PersistenceAuth", "authenticate success", &Utils.Colors.with_yellow_and_underline/1)
           {:reply, {:ok, :authenticated}, users}
         else
-          log("authenticate invalid_password")
+          Utils.Log.log("PersistenceAuth", "authenticate invalid_password", &Utils.Colors.with_yellow_and_underline/1)
           {:reply, {:error, :invalid_password}, users}
         end
 
       :error ->
-        log("authenticate user_not_found")
+        Utils.Log.log("PersistenceAuth", "authenticate user_not_found", &Utils.Colors.with_yellow_and_underline/1)
         {:reply, {:error, :user_not_found}, users}
     end
   end
@@ -90,10 +89,5 @@ defmodule Actors.Persistence.Auth do
     users
     |> Jason.encode!(pretty: true)
     |> (&File.write!(@json_file, &1)).()
-  end
-
-  # *** private api
-  defp log(msg) do
-    IO.puts("#{Colors.with_yellow_and_underline("Persistence.Auth")} #{msg}")
   end
 end

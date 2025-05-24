@@ -32,7 +32,7 @@ defmodule Actors.GameManager do
   # HANDLE INFO
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}} = reason}, %{active_games: active_games} = state) do
-    log(":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
+    Utils.Log.log("GameManager", ":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}", &Colors.with_cyan_bright/1)
 
     new_active_games = Map.delete(active_games, uuid)
 
@@ -41,7 +41,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_game_ended, uuid}} = reason}, %{active_games: active_games} = state) do
-    log(":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
+    Utils.Log.log("GameManager", ":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}", &Colors.with_cyan_bright/1)
 
     new_active_games = Map.delete(active_games, uuid)
 
@@ -52,7 +52,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@player_opt_in, name, pid}, _from, %{players: players} = state) do
-    log("#{name} opt_in")
+    Utils.Log.log("GameManager", "#{name} opt_in", &Colors.with_cyan_bright/1)
 
     count = (players |> Map.keys() |> length) + 1
 
@@ -86,7 +86,7 @@ defmodule Actors.GameManager do
           {:ok, table_manager_pid} = Actors.NewTableManager.start(uuid, new_players)
           Process.monitor(table_manager_pid)
 
-          log("Game #{uuid} is starting")
+          Utils.Log.log("GameManager", "Game #{uuid} is starting", &Colors.with_cyan_bright/1)
 
           # Update state
           datetime = DateTime.utc_now()
@@ -115,7 +115,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@player_opt_out, name}, _from, %{players: players} = state) do
-    log("#{name} opt_out")
+    Utils.Log.log("GameManager", "#{name} opt_out", &Colors.with_cyan_bright/1)
 
     case Map.has_key?(players, name) do
       false ->
@@ -139,7 +139,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@list_open_tables, name}, _from, %{active_players: active_players} = state) do
-    log("#{name} list_open_tables")
+    Utils.Log.log("GameManager", "#{name} list_open_tables", &Colors.with_cyan_bright/1)
 
     case active_players[name] do
       # list is [{game_uuid, game_desc}, ...]
@@ -153,7 +153,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@list_all_open_tables}, from, %{active_games: active_games} = state) do
-    log("#{inspect(from)} list_all_open_tables")
+    Utils.Log.log("GameManager", "#{inspect(from)} list_all_open_tables", &Colors.with_cyan_bright/1)
 
     list =
       Enum.to_list(active_games)
@@ -164,7 +164,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@rejoin, name, uuid, player_pid}, _from, %{active_games: active_games} = state) do
-    log("#{name} rejoin #{uuid}")
+    Utils.Log.log("GameManager", "#{name} rejoin #{uuid}", &Colors.with_cyan_bright/1)
 
     case active_games[uuid] do
       {_, _} ->
@@ -183,7 +183,7 @@ defmodule Actors.GameManager do
 
   @impl true
   def handle_call({@observe, name, uuid, player_pid}, _from, %{active_games: active_games} = state) do
-    log("#{name} observe #{uuid}")
+    Utils.Log.log("GameManager", "#{name} observe #{uuid}", &Colors.with_cyan_bright/1)
 
     case active_games[uuid] do
       {_, _} ->
@@ -224,10 +224,5 @@ defmodule Actors.GameManager do
 
   def observe(name, uuid, player_pid) do
     GenServer.call(@gamemanager, {@observe, name, uuid, player_pid})
-  end
-
-  # *** private api
-  defp log(msg) do
-    IO.puts("#{Colors.with_cyan_bright("GameManager")} #{msg}")
   end
 end

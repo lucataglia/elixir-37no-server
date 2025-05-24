@@ -27,13 +27,13 @@ defmodule Actors.Lobby do
   end
 
   def start(client, name, bridge_pid) do
-    log(name, "Actor.Lobby start " <> inspect(self()))
+    Utils.Log.log("Lobby", name, "Actor.Lobby start " <> inspect(self()), &Utils.Colors.with_red_bright/1)
 
     GenServer.start(__MODULE__, init_state(client, name, bridge_pid))
   end
 
   def start_link(client, name, bridge_pid) do
-    log(name, "Actor.Lobby start_link " <> inspect(self()))
+    Utils.Log.log("Lobby", name, "Actor.Lobby start_link " <> inspect(self()), &Utils.Colors.with_red_bright/1)
 
     GenServer.start_link(__MODULE__, init_state(client, name, bridge_pid))
   end
@@ -41,25 +41,25 @@ defmodule Actors.Lobby do
   # HANDLE INFO
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :bridge_shutdown_client_exit} = reason}, %{name: name, behavior: behavior} = state) do
-    log(name, ":DOWN Bridge #{inspect(pid)} exited with reason #{inspect(reason)}")
+    Utils.Log.log("Lobby", name, ":DOWN Bridge #{inspect(pid)} exited with reason #{inspect(reason)}", &Utils.Colors.with_red_bright/1)
 
     case behavior do
       @behavior_lobby ->
-        log(name, "behavior #{behavior} - do nothing")
+        Utils.Log.log("Lobby", name, "behavior #{behavior} - do nothing", &Utils.Colors.with_red_bright/1)
 
       @behavior_opted_in ->
-        log(name, "behavior #{behavior} - opt_out")
+        Utils.Log.log("Lobby", name, "behavior #{behavior} - opt_out", &Utils.Colors.with_red_bright/1)
 
         case Actors.GameManager.remove_player(name) do
           {:error, :user_not_registered} ->
-            log(name, "behavior #{behavior} - opt_out - user_not_registered")
+            Utils.Log.log("Lobby", name, "behavior #{behavior} - opt_out - user_not_registered", &Utils.Colors.with_red_bright/1)
 
           {:ok, _} ->
-            log(name, "behavior #{behavior} - opt_out - ok")
+            Utils.Log.log("Lobby", name, "behavior #{behavior} - opt_out - ok", &Utils.Colors.with_red_bright/1)
         end
 
       @behavior_forward_everything_to_player_actor ->
-        log(name, "behavior #{behavior} - do nothing")
+        Utils.Log.log("Lobby", name, "behavior #{behavior} - do nothing", &Utils.Colors.with_red_bright/1)
     end
 
     {:stop, reason, state}
@@ -67,7 +67,7 @@ defmodule Actors.Lobby do
 
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :player_shutdown_left_the_game} = reason}, %{client: client, name: name, bridge_pid: bridge_pid}) do
-    log(name, ":DOWN Player #{inspect(pid)} left the table #{inspect(reason)}")
+    Utils.Log.log("Lobby", name, ":DOWN Player #{inspect(pid)} left the table #{inspect(reason)}", &Utils.Colors.with_red_bright/1)
 
     info_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}")
 
@@ -76,7 +76,7 @@ defmodule Actors.Lobby do
 
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}} = reason}, %{client: client, name: name, bridge_pid: bridge_pid, behavior: behavior}) do
-    log(name, ":DOWN Player #{inspect(pid)} table #{inspect(uuid)} closed due to inactivity #{inspect(reason)} #{inspect(behavior)}")
+    Utils.Log.log("Lobby", name, ":DOWN Player #{inspect(pid)} table #{inspect(uuid)} closed due to inactivity #{inspect(reason)} #{inspect(behavior)}", &Utils.Colors.with_red_bright/1)
 
     warning_message(self(), message: "#{Messages.title()}\n\n#{Actors.Lobby.Messages.lobby(name)}\n\n", piggyback: Actors.Lobby.Messages.table_maanger_stopped_due_to_inactivity())
 
@@ -88,7 +88,7 @@ defmodule Actors.Lobby do
   # TERMINATE (for debug at the moment)
   @impl true
   def terminate(reason, %{name: n} = state) do
-    log(n, "GenServer stopping with reason: #{inspect(reason)} and state: #{inspect(state)}")
+    Utils.Log.log("Lobby", n, "GenServer stopping with reason: #{inspect(reason)} and state: #{inspect(state)}", &Utils.Colors.with_red_bright/1)
     :ok
   end
 
@@ -279,22 +279,22 @@ defmodule Actors.Lobby do
 
   @impl true
   def handle_cast({@game_start}, %{name: name} = state) do
-    log(name, "game_start: #{state[:behavior]}")
+    Utils.Log.log("Lobby", name, "game_start: #{state[:behavior]}", &Utils.Colors.with_red_bright/1)
 
     case state[:behavior] do
       # e.g. rejoin
       @behavior_lobby ->
-        log(name, "Game start")
+        Utils.Log.log("Lobby", name, "Game start", &Utils.Colors.with_red_bright/1)
         {:noreply, %{state | behavior: @behavior_forward_everything_to_player_actor}}
 
       # e.g. game start
       @behavior_opted_in ->
-        log(name, "Game start")
+        Utils.Log.log("Lobby", name, "Game start", &Utils.Colors.with_red_bright/1)
         {:noreply, %{state | behavior: @behavior_forward_everything_to_player_actor}}
 
       # this should never happen
       _ ->
-        log(name, "Error: got :game_start in #{state[:behavior]} behavior")
+        Utils.Log.log("Lobby", name, "Error: got :game_start in #{state[:behavior]} behavior", &Utils.Colors.with_red_bright/1)
         {:noreply, state}
     end
   end
@@ -302,7 +302,7 @@ defmodule Actors.Lobby do
   # STATE - GAME START
   @impl true
   def handle_cast({@recv, _} = envelop, %{name: n, player_pid: player_pid, behavior: @behavior_forward_everything_to_player_actor} = state) do
-    log(n, inspect(envelop))
+    Utils.Log.log("Lobby", n, inspect(envelop), &Utils.Colors.with_red_bright/1)
     GenServer.cast(player_pid, envelop)
     # GenServer.cast(player_pid, Tuple.insert_at(envelop, tuple_size(envelop), self()))
 
@@ -311,7 +311,7 @@ defmodule Actors.Lobby do
 
   # DEGUB that match everything
   def handle_cast({x, _}, %{name: name} = state) do
-    log_debug(name, "Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    Utils.Log.log_debug("Lobby", name, "Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
 
     {:noreply, state}
   end
@@ -320,7 +320,7 @@ defmodule Actors.Lobby do
 
   @impl true
   def init(%{name: name, bridge_pid: bridge_pid} = initial_state) do
-    log(name, "Actor.Lobby init " <> inspect(self()))
+    Utils.Log.log("Lobby", name, "Actor.Lobby init " <> inspect(self()), &Utils.Colors.with_red_bright/1)
 
     Process.monitor(bridge_pid)
 
@@ -365,14 +365,5 @@ defmodule Actors.Lobby do
 
   def game_start(pid) do
     GenServer.cast(pid, {@game_start})
-  end
-
-  # *** private api
-  defp log(name, msg) do
-    IO.puts("#{Colors.with_magenta("Lobby")} #{name}: #{msg}")
-  end
-
-  defp log_debug(name, msg) do
-    IO.puts("#{Colors.with_red_bright("Lobby (DEBUG)")} #{name}: #{msg}")
   end
 end

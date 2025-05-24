@@ -21,7 +21,7 @@ defmodule Actors.Bridge do
   end
 
   def start_link(client) do
-    log("Actor.Bridge start_link" <> inspect(self()))
+    Utils.Log.log("Bridge", "Actor.Bridge start_link" <> inspect(self()), &Utils.Colors.with_cyan/1)
 
     GenServer.start_link(__MODULE__, init_state(client))
   end
@@ -29,7 +29,7 @@ defmodule Actors.Bridge do
   # HANDLE INFO
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :lobby_shutdown_back_msg}}, %{client: client} = state) do
-    log("Monitored process #{inspect(pid)} exited with reason #{inspect({:shutdown, :back})}")
+    Utils.Log.log("Bridge", "Monitored process #{inspect(pid)} exited with reason #{inspect({:shutdown, :back})}", &Utils.Colors.with_cyan/1)
 
     {:ok, pid} = Actors.Login.start(client, self())
 
@@ -39,13 +39,13 @@ defmodule Actors.Bridge do
   # STOP
   @impl true
   def handle_cast({@exit}, state) do
-    log("Client #{Colors.with_underline("exit")} - Actors.Bridge stop himself " <> inspect(self()))
+    Utils.Log.log("Bridge", "Client #{Colors.with_underline("exit")} - Actors.Bridge stop himself " <> inspect(self()), &Utils.Colors.with_cyan/1)
     {:stop, {:shutdown, :bridge_shutdown_client_exit}, state}
   end
 
   @impl true
   def handle_cast({@client_disconected}, state) do
-    log("Client #{Colors.with_underline("disconected")} - Actors.Bridge stop himself " <> inspect(self()))
+    Utils.Log.log("Bridge", "Client #{Colors.with_underline("disconected")} - Actors.Bridge stop himself " <> inspect(self()), &Utils.Colors.with_cyan/1)
     {:stop, {:shutdown, :bridge_shutdown_client_exit}, state}
   end
 
@@ -74,7 +74,7 @@ defmodule Actors.Bridge do
   # FORWARD EVERYTHING TO Actor.Lobby
   @impl true
   def handle_cast({@recv, _} = envelop, %{name: n, lobby_actor: lobby_actor, behavior: :logged} = state) do
-    log(n, inspect(envelop))
+    Utils.Log.log("Bridge", n, inspect(envelop), &Utils.Colors.with_cyan/1)
     GenServer.cast(lobby_actor, envelop)
 
     {:noreply, state}
@@ -82,7 +82,7 @@ defmodule Actors.Bridge do
 
   # DEGUB that march everything
   def handle_cast({x, _}, state) do
-    log("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    Utils.Log.log("Bridge", "Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]), &Utils.Colors.with_cyan/1)
 
     {:noreply, state}
   end
@@ -91,7 +91,7 @@ defmodule Actors.Bridge do
 
   @impl true
   def init(%{client: client} = initial_state) do
-    log("Actor.Bridge init" <> inspect(self()))
+    Utils.Log.log("Bridge", "Actor.Bridge init" <> inspect(self()), &Utils.Colors.with_cyan/1)
 
     {:ok, pid} = Actors.Login.start(client, self())
 
@@ -112,11 +112,4 @@ defmodule Actors.Bridge do
   end
 
   # *** private api
-  defp log(msg) do
-    IO.puts("#{Colors.with_cyan("Bridge")} #{msg}")
-  end
-
-  defp log(name, msg) do
-    IO.puts("#{Colors.with_cyan("Bridge")} #{name}: #{msg}")
-  end
 end

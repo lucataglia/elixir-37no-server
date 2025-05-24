@@ -40,13 +40,13 @@ defmodule Actors.Player do
   end
 
   def start(client, name, lobby_pid) do
-    log(name, "start")
+    Utils.Log.log("Player", name, "start", &Utils.Colors.with_magenta/1)
 
     GenServer.start(__MODULE__, init_state(client, name, lobby_pid))
   end
 
   def start_link(client, name, lobby_pid) do
-    log(name, "start_link")
+    Utils.Log.log("Player", name, "start_link", &Utils.Colors.with_magenta/1)
 
     GenServer.start_link(__MODULE__, init_state(client, name, lobby_pid))
   end
@@ -54,30 +54,30 @@ defmodule Actors.Player do
   # HANDLE INFO
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, {:table_manager_shutdown_due_to_inactivity, _uuid}} = reason}, %{name: name} = state) do
-    log(name, ":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}")
+    Utils.Log.log("Player", name, ":DOWN TableManager #{inspect(pid)} exited with reason #{inspect(reason)}", &Utils.Colors.with_magenta/1)
 
     {:stop, reason, state}
   end
 
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :bridge_shutdown_client_exit} = reason}, %{name: name, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
-    log(name, ":DOWN Lobby #{inspect(pid)} exited with reason #{inspect(reason)}")
+    Utils.Log.log("Player", name, ":DOWN Lobby #{inspect(pid)} exited with reason #{inspect(reason)}", &Utils.Colors.with_magenta/1)
 
     case behavior do
       :init ->
-        log(name, "behavior #{behavior} - do nothing")
+        Utils.Log.log("Player", name, "behavior #{behavior} - do nothing", &Utils.Colors.with_magenta/1)
 
         {:stop, reason, state}
 
       :observer ->
-        log(name, "behavior #{behavior} - NewTableManager.player_left_the_game")
+        Utils.Log.log("Player", name, "behavior #{behavior} - NewTableManager.player_left_the_game", &Utils.Colors.with_magenta/1)
 
         Actors.NewTableManager.observer_leave({:pid, table_manager_pid}, name)
 
         {:stop, reason, state}
 
       _ ->
-        log(name, "behavior #{behavior} - NewTableManager.player_left_the_game")
+        Utils.Log.log("Player", name, "behavior #{behavior} - NewTableManager.player_left_the_game", &Utils.Colors.with_magenta/1)
 
         Actors.NewTableManager.player_left_the_game({:pid, table_manager_pid}, name)
 
@@ -117,7 +117,7 @@ defmodule Actors.Player do
   # BACK
   @impl true
   def handle_cast({@recv, "back"}, %{name: n, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
-    log(n, "back")
+    Utils.Log.log("Player", n, "back", &Utils.Colors.with_magenta/1)
 
     case behavior do
       :observer -> Actors.NewTableManager.observer_leave({:pid, table_manager_pid}, n)
@@ -140,7 +140,7 @@ defmodule Actors.Player do
   # GAME STATE UPDATE (e.g. some player exit the game)
   @impl true
   def handle_cast({@game_state_update, new_game_state, piggyback}, %{name: n, behavior: behavior} = state) do
-    log(n, "game_state_update - #{behavior}")
+    Utils.Log.log("Player", n, "game_state_update - #{behavior}", &Utils.Colors.with_magenta/1)
 
     print_table(self(), Utils.Colors.with_yellow(piggyback))
 
@@ -161,7 +161,7 @@ defmodule Actors.Player do
   def handle_cast({@observer, table_manager_pid, new_game_state, piggyback}, %{name: n, lobby_pid: lobby_pid} = state) do
     Actors.Lobby.game_start(lobby_pid)
 
-    log(n, "monitor" <> inspect(table_manager_pid))
+    Utils.Log.log("Player", n, "monitor" <> inspect(table_manager_pid), &Utils.Colors.with_magenta/1)
     Process.monitor(table_manager_pid)
 
     print_table(self(), Utils.Colors.with_yellow(piggyback))
@@ -172,10 +172,10 @@ defmodule Actors.Player do
   # REJOIN SUCCESS - as dealer
   @impl true
   def handle_cast({@rejoin_success, table_manager_pid, new_game_state, true, piggyback}, %{name: n, lobby_pid: lobby_pid} = state) do
-    log(n, "Rejoin success as dealer")
+    Utils.Log.log("Player", n, "Rejoin success as dealer", &Utils.Colors.with_magenta/1)
     Actors.Lobby.game_start(lobby_pid)
 
-    log(n, "monitor" <> inspect(table_manager_pid))
+    Utils.Log.log("Player", n, "monitor" <> inspect(table_manager_pid), &Utils.Colors.with_magenta/1)
     Process.monitor(table_manager_pid)
 
     {:ok, ref} = :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
@@ -188,10 +188,10 @@ defmodule Actors.Player do
   # REJOIN SUCCESS - as better
   @impl true
   def handle_cast({@rejoin_success, table_manager_pid, new_game_state, false, piggyback}, %{name: n, lobby_pid: lobby_pid} = state) do
-    log(n, "Rejoin success as better")
+    Utils.Log.log("Player", n, "Rejoin success as better", &Utils.Colors.with_magenta/1)
     Actors.Lobby.game_start(lobby_pid)
 
-    log(n, "monitor" <> inspect(table_manager_pid))
+    Utils.Log.log("Player", n, "monitor" <> inspect(table_manager_pid), &Utils.Colors.with_magenta/1)
     Process.monitor(table_manager_pid)
 
     print_table(self(), Utils.Colors.with_yellow(piggyback))
@@ -202,10 +202,10 @@ defmodule Actors.Player do
   # STATE - INIT (behavior is :dealer or :better)
   @impl true
   def handle_cast({@start_game, table_manager_pid, behavior, game_state}, %{name: n, lobby_pid: lobby_pid} = state) do
-    log(n, "Start game " <> inspect(behavior))
+    Utils.Log.log("Player", n, "Start game " <> inspect(behavior), &Utils.Colors.with_magenta/1)
     Actors.Lobby.game_start(lobby_pid)
 
-    log(n, "monitor" <> inspect(table_manager_pid))
+    Utils.Log.log("Player", n, "monitor" <> inspect(table_manager_pid), &Utils.Colors.with_magenta/1)
     Process.monitor(table_manager_pid)
 
     {:ok, ref} =
@@ -223,7 +223,7 @@ defmodule Actors.Player do
   # RECV
   @impl true
   def handle_cast({@recv, data}, %{name: n, table_manager_pid: table_manager_pid, behavior: behavior} = state) do
-    log(n, "#{data} #{behavior}")
+    Utils.Log.log("Player", n, "#{data} #{behavior}", &Utils.Colors.with_magenta/1)
 
     cond do
       String.downcase(data) =~ ~r/^obs yes [A-Za-z]{3,10}$/ ->
@@ -274,6 +274,9 @@ defmodule Actors.Player do
       behavior == :dealer ->
         dealer_behavior(data, state)
 
+      behavior == :dealer_with_choice ->
+        dealer_with_choice_behavior(data, state)
+
       behavior == :better ->
         better_behavior(data, state)
 
@@ -285,16 +288,16 @@ defmodule Actors.Player do
     end
   end
 
-  # STATE - DEALER
+  # STATE - DEALER_WITH_CHOICE
   @impl true
-  def handle_cast({@dealer, game_state}, %{behavior: :dealer} = state) do
+  def handle_cast({@dealer, game_state}, %{behavior: :dealer_with_choice} = state) do
     print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :dealer}}
   end
 
   @impl true
-  def handle_cast({@better, game_state}, %{behavior: :dealer} = state) do
+  def handle_cast({@better, game_state}, %{behavior: :dealer_with_choice} = state) do
     print_table(self())
 
     {:noreply, %{state | game_state: game_state, behavior: :better}}
@@ -308,7 +311,7 @@ defmodule Actors.Player do
     {:ok, ref} = :timer.send_interval(@timer_i_am_thinking_deeply, @broadcast_i_am_thinking_deeply)
 
     if s do
-      log(n, "unstash: #{inspect(s)}")
+      Utils.Log.log("Player", n, "unstash: #{inspect(s)}", &Utils.Colors.with_magenta/1)
 
       GenServer.cast(self(), {@recv, s})
     end
@@ -326,7 +329,7 @@ defmodule Actors.Player do
   # STATE - END GAME
   @impl true
   def handle_cast({@end_game, game_state}, %{name: name} = state) do
-    log(name, "end_game - there_is_a_looser" <> inspect(game_state[:there_is_a_looser]))
+    Utils.Log.log("Player", name, "end_game - there_is_a_looser" <> inspect(game_state[:there_is_a_looser]), &Utils.Colors.with_magenta/1)
 
     print_table(self())
 
@@ -350,8 +353,19 @@ defmodule Actors.Player do
 
   # DEGUB that march everything
   @impl true
-  def handle_cast(envelop, %{name: n} = state) do
-    log_debug(n, "Receiced: " <> inspect(envelop) <> " - Behavior: " <> inspect(state[:behavior]))
+  def handle_cast(envelop, %{name: n, behavior: behavior} = state) do
+    max_length = 100
+
+    envelop_str = inspect(envelop)
+
+    trimmed_envelop =
+      if String.length(envelop_str) > max_length do
+        String.slice(envelop_str, 0, max_length) <> "..."
+      else
+        envelop_str
+      end
+
+    Utils.Log.log_debug("Player", n, "Behavior: #{inspect(behavior)} | Received: #{trimmed_envelop}")
 
     {:noreply, state}
   end
@@ -360,8 +374,8 @@ defmodule Actors.Player do
 
   @impl true
   def init(%{name: n, lobby_pid: lobby_pid} = initial_state) do
-    log(n, "Actor.Player init" <> inspect(self()))
-    log(n, "Actor.Player monitor" <> inspect(lobby_pid))
+    Utils.Log.log("Player", n, "Actor.Player init" <> inspect(self()), &Utils.Colors.with_magenta/1)
+    Utils.Log.log("Player", n, "Actor.Player monitor" <> inspect(lobby_pid), &Utils.Colors.with_magenta/1)
 
     Process.monitor(lobby_pid)
 
@@ -458,20 +472,13 @@ defmodule Actors.Player do
   end
 
   # *** private api
-  defp log(n, msg) do
-    IO.puts("#{Colors.with_light_magenta("Player")} #{Colors.with_underline(n)} #{msg}")
-  end
-
-  defp log_debug(n, msg) do
-    IO.puts("#{Colors.with_red_bright("Player (DEBUG)")} #{n}: #{msg}")
-  end
 
   defp observer_behavior(data, %{name: n, table_manager_pid: table_manager_pid, behavior: :observer} = state) do
-    log(n, "Observe other player")
+    Utils.Log.log("Player", n, "Observe other player", &Utils.Colors.with_magenta/1)
 
     case Utils.Regex.check_observe_a_player(data) do
       {:ok, observed} ->
-        log(n, "Observe other player: #{observed}")
+        Utils.Log.log("Player", n, "Observe other player: #{observed}", &Utils.Colors.with_magenta/1)
 
         case Actors.NewTableManager.ask_to_observe_someone({:pid, table_manager_pid}, n, observed) do
           {:error, :you_are_not_an_observer} ->
@@ -492,7 +499,7 @@ defmodule Actors.Player do
         end
 
       {:error, :invalid_input} ->
-        log(n, "Observe other player: invalid_input")
+        Utils.Log.log("Player", n, "Observe other player: invalid_input", &Utils.Colors.with_magenta/1)
         warning_message(self(), Actors.Player.Messages.invalid_input())
 
         {:noreply, state}
@@ -503,7 +510,7 @@ defmodule Actors.Player do
          data,
          %{intervals: %{i_am_thinking_deeply: ref_i_am_thinking_deeply}, game_state: game_state, table_manager_pid: table_manager_pid, deck: deck, name: name, behavior: :dealer} = state
        ) do
-    log(name, "dealer_behavior - recv: #{data}")
+    Utils.Log.log("Player", name, "dealer_behavior - recv: #{data}", &Utils.Colors.with_magenta/1)
 
     case Utils.Regex.check_is_valid_card_key(data) do
       {:error, :invalid_input} ->
@@ -525,37 +532,55 @@ defmodule Actors.Player do
                 :timer.cancel(ref_i_am_thinking_deeply)
                 Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, choice)
 
+                {:noreply, %{state | behavior: :dealer_with_choice}}
+
               {:ok, :change_ranking} ->
                 :timer.cancel(ref_i_am_thinking_deeply)
                 Actors.NewTableManager.send_choice({:pid, table_manager_pid}, name, %{choice | ranking: 0})
+
+                {:noreply, %{state | behavior: :dealer_with_choice}}
 
               {:error, :wrong_suit} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
                 print_table(self(), piggyback)
 
+                {:noreply, state}
+
               {:error, :card_already_used} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
                 print_table(self(), piggyback)
 
+                {:noreply, state}
+
               {:error, :invalid_input} ->
                 piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
                 print_table(self(), piggyback)
+
+                {:noreply, state}
             end
           else
             piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
             print_table(self(), piggyback)
+
+            {:noreply, state}
           end
         else
           piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
           print_table(self(), piggyback)
-        end
 
-        {:noreply, state}
+          {:noreply, state}
+        end
     end
   end
 
+  defp dealer_with_choice_behavior(data, %{name: n} = state) do
+    Utils.Log.log("Player", n, "dealer_with_choice #{data}", &Utils.Colors.with_magenta/1)
+
+    {:noreply, state}
+  end
+
   defp better_behavior(data, %{name: name, game_state: game_state, deck: deck, behavior: :better} = state) do
-    log(name, " better: #{data}")
+    Utils.Log.log("Player", name, " better: #{data}", &Utils.Colors.with_magenta/1)
 
     turn_first_card = game_state[:turn_first_card]
 
@@ -582,13 +607,13 @@ defmodule Actors.Player do
               if Map.has_key?(cards, String.to_atom(data)) do
                 case Deck.check_card_is_valid(data, cards, turn_first_card) do
                   :ok ->
-                    log(name, "stash: #{inspect(choice.key)}")
+                    Utils.Log.log("Player", name, "stash: #{inspect(choice.key)}", &Utils.Colors.with_magenta/1)
 
                     print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
                     %{state | stash: choice.key}
 
                   {:ok, :change_ranking} ->
-                    log(name, "stash: #{inspect(choice.key)}")
+                    Utils.Log.log("Player", name, "stash: #{inspect(choice.key)}", &Utils.Colors.with_magenta/1)
 
                     print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
                     %{state | stash: choice.key}
@@ -631,7 +656,7 @@ defmodule Actors.Player do
 
   @impl true
   defp end_game_behavior(data, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
-    log(name, "end_game: #{data}")
+    Utils.Log.log("Player", name, "end_game: #{data}", &Utils.Colors.with_magenta/1)
 
     case Utils.Regex.check_end_game_input(data) do
       {:share} ->
@@ -656,7 +681,7 @@ defmodule Actors.Player do
 
   @impl true
   defp ready_to_replay_behavior(data, %{name: name, table_manager_pid: table_manager_pid, behavior: :ready_to_replay} = state) do
-    log(name, "ready_to_replay: #{data}")
+    Utils.Log.log("Player", name, "ready_to_replay: #{data}", &Utils.Colors.with_magenta/1)
 
     case Utils.Regex.check_end_game_input_ready_to_replay(data) do
       {:share} ->

@@ -11,4 +11,11 @@ reduce the time of the intervall if the timer expired X times.
 Move all the files created by Persistence Actors under a db folder so I can gitignore
 only the db folder.
 
-Init stats when a new account is created.
+Init stats when a new account is created
+✅
+
+Put the timestamp into the log 
+✅ (add Utils.Log module)
+
+Fix the marconobile bug when it was dealer 
+✅ (add dealer_with_choice behavior)

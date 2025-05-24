@@ -15,13 +15,13 @@ defmodule Actors.Login do
   end
 
   def start(client, bridge_pid) do
-    log("Actor.Login start [caller pid]" <> inspect(self()))
+    Utils.Log.log("Login", "Actor.Login start [caller pid]" <> inspect(self()), &Utils.Colors.with_light_cyan/1)
 
     GenServer.start(__MODULE__, %{init_state(bridge_pid) | client: client})
   end
 
   def start_link(client, bridge_pid) do
-    log("Actor.Login start_link [caller pid]" <> inspect(self()))
+    Utils.Log.log("Login", "Actor.Login start_link [caller pid]" <> inspect(self()), &Utils.Colors.with_light_cyan/1)
 
     GenServer.start_link(__MODULE__, %{init_state(bridge_pid) | client: client})
   end
@@ -29,7 +29,7 @@ defmodule Actors.Login do
   # HANDLE INFO
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, {:shutdown, :bridge_shutdown_client_exit} = reason}, state) do
-    log("Bridge #{inspect(pid)} exited with reason #{inspect(reason)}")
+    Utils.Log.log("Login", "Bridge #{inspect(pid)} exited with reason #{inspect(reason)}", &Utils.Colors.with_light_cyan/1)
 
     {:stop, reason, state}
   end
@@ -100,7 +100,7 @@ defmodule Actors.Login do
       {:ok, name, password} ->
         case Actors.Persistence.Auth.authenticate(name, password) do
           {:ok, :authenticated} ->
-            log("Login successful for user #{name}.")
+            Utils.Log.log("Login", "Login successful for user #{name}.", &Utils.Colors.with_light_cyan/1)
 
             {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
@@ -146,7 +146,7 @@ defmodule Actors.Login do
           :ok ->
             Actors.Persistence.Stats.init_player(name)
 
-            log("User #{name} signed up successfully.")
+            Utils.Log.log("Login", "User #{name} signed up successfully.", &Utils.Colors.with_light_cyan/1)
 
             {:stop, :normal, {:ok, :goto_lobby, name}, state}
 
@@ -173,7 +173,7 @@ defmodule Actors.Login do
   # DEGUB that march everything
   @impl true
   def handle_cast({x, _}, state) do
-    log("Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]))
+    Utils.Log.log("Login", "Receiced " <> inspect(x) <> " behavior" <> inspect(state[:behavior]), &Utils.Colors.with_light_cyan/1)
 
     {:noreply, state}
   end
@@ -182,16 +182,12 @@ defmodule Actors.Login do
 
   @impl true
   def init(%{bridge_pid: bridge_pid} = initial_state) do
-    log("Actor.Login init" <> inspect(self()))
+    Utils.Log.log("Login", "Actor.Login init" <> inspect(self()), &Utils.Colors.with_light_cyan/1)
 
     Process.monitor(bridge_pid)
 
     GenServer.cast(self(), {:message, "#{Messages.title()}\n\n#{Actors.Login.Messages.menu()}"})
 
     {:ok, initial_state}
-  end
-
-  defp log(msg) do
-    IO.puts("#{Colors.with_light_cyan("Login")} #{msg}")
   end
 end

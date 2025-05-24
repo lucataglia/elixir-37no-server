@@ -145,7 +145,6 @@ defmodule Messages do
         _ -> nil
       end)
 
-    IO.puts(inspect(observers))
     obs_count = String.pad_trailing("#{map_size(observers)} (#{observed_accepted_count})", 12)
     # *** End Observer
 

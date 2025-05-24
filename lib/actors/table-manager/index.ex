@@ -1,5 +1,3 @@
-# IO.puts("set card AFTER: " <> inspect(Map.put(game_state[:players][name], :current, card), pretty: true, syntax_colors: [atom: :cyan, string: :green]))
-
 defmodule Actors.NewTableManager do
   @moduledoc """
   Actor.NewTableManager
@@ -125,7 +123,7 @@ defmodule Actors.NewTableManager do
   # HANDLE INFO
   @impl true
   def handle_info(@shutdown_due_to_inactivity, %{timers_shutdown_due_to_inactivity: ref, uuid: uuid} = state) do
-    log("shutdown_due_to_inactivity #{uuid} #{inspect(ref)}")
+    Utils.Log.log("TableManager", "shutdown_due_to_inactivity #{uuid} #{inspect(ref)}", &Colors.with_yellow_bright/1)
 
     {:stop, {:shutdown, {:table_manager_shutdown_due_to_inactivity, uuid}}, state}
   end
@@ -133,7 +131,7 @@ defmodule Actors.NewTableManager do
   # Handled only for the cast, not for the call
   @impl true
   def handle_cast({msg, @wrapper_outer}, %{timers_shutdown_due_to_inactivity: ref} = state) do
-    log("Wrapper #{inspect(msg)} #{inspect(ref)}")
+    Utils.Log.log("TableManager", "Wrapper #{inspect(msg)} #{inspect(ref)}", &Colors.with_yellow_bright/1)
 
     case ref do
       nil ->
@@ -141,12 +139,11 @@ defmodule Actors.NewTableManager do
 
       r ->
         millis_left = Process.cancel_timer(r)
-        log("Wrapper #{inspect(ref)} clear timer: #{millis_left}")
+        Utils.Log.log("TableManager", "Wrapper #{inspect(ref)} clear timer: #{millis_left}", &Colors.with_yellow_bright/1)
     end
 
     new_ref = Process.send_after(self(), @shutdown_due_to_inactivity, timer_inactivity())
 
-    IO.puts(inspect({msg, @wrapper_inner}))
     GenServer.cast(self(), {msg, @wrapper_inner})
 
     {:noreply, %{state | timers_shutdown_due_to_inactivity: new_ref}}
@@ -154,7 +151,7 @@ defmodule Actors.NewTableManager do
 
   @impl true
   def handle_cast({{@broadcast_warning, msg}, @wrapper_inner}, %{game_state: game_state} = state) do
-    log("broadcast_warning #{msg}")
+    Utils.Log.log("TableManager", "broadcast_warning #{msg}", &Colors.with_yellow_bright/1)
 
     players = game_state[:players]
     observers = game_state[:observers]
@@ -176,7 +173,7 @@ defmodule Actors.NewTableManager do
   # LEFT THE GAME
   @impl true
   def handle_cast({{@player_left_the_game, name}, @wrapper_inner}, %{uuid: uuid, game_state: game_state} = state) do
-    log("#{name} left the game #{uuid}")
+    Utils.Log.log("TableManager", "#{name} left the game #{uuid}", &Colors.with_yellow_bright/1)
 
     players = game_state[:players]
     new_player = %{players[name] | is_stopped: true}
@@ -184,10 +181,14 @@ defmodule Actors.NewTableManager do
 
     count = new_players |> Enum.count(fn {_name, %{is_stopped: s}} -> s end)
 
-    log("#{name} left the game #{uuid} - #{count} players left (#{new_players |> Map.values() |> Enum.filter(& &1.is_stopped) |> Enum.map(& &1.name) |> Enum.join(", ")})")
+    Utils.Log.log(
+      "TableManager",
+      "#{name} left the game #{uuid} - #{count} players left (#{new_players |> Map.values() |> Enum.filter(& &1.is_stopped) |> Enum.map(& &1.name) |> Enum.join(", ")})",
+      &Colors.with_yellow_bright/1
+    )
 
     if count == 3 do
-      log("#{name} everybody left the game #{uuid} - game ended")
+      Utils.Log.log("TableManager", "#{name} everybody left the game #{uuid} - game ended", &Colors.with_yellow_bright/1)
       {:stop, {:shutdown, {:table_manager_shutdown_game_ended, uuid}}, state}
     else
       new_game_state = %{game_state | players: new_players}
@@ -283,22 +284,22 @@ defmodule Actors.NewTableManager do
 
   @impl true
   def handle_call({@ask_to_observe, observer, observed}, _from, %{game_state: game_state} = state) do
-    log("#{observer} ask to observe #{observed}")
+    Utils.Log.log("TableManager", "#{observer} ask to observe #{observed}", &Colors.with_yellow_bright/1)
 
     observers = game_state[:observers]
     players = game_state[:players]
 
     case {Map.has_key?(observers, observer), Map.has_key?(players, observed)} do
       {false, _} ->
-        log("#{observer} ask to observe #{observed} - :you_are_not_an_observer")
+        Utils.Log.log("TableManager", "#{observer} ask to observe #{observed} - :you_are_not_an_observer", &Colors.with_yellow_bright/1)
         {:reply, {:error, :you_are_not_an_observer}, state}
 
       {_, false} ->
-        log("#{observer} ask to observe #{observed} - :player_does_not_exist")
+        Utils.Log.log("TableManager", "#{observer} ask to observe #{observed} - :player_does_not_exist", &Colors.with_yellow_bright/1)
         {:reply, {:error, :player_does_not_exist}, state}
 
       {true, true} ->
-        log("#{observer} ask to observe #{observed} - :ok")
+        Utils.Log.log("TableManager", "#{observer} ask to observe #{observed} - :ok", &Colors.with_yellow_bright/1)
 
         notification_alreasy_exist =
           Enum.find(get_in(game_state, [:notifications, :observers]), fn el ->
@@ -334,22 +335,22 @@ defmodule Actors.NewTableManager do
 
   @impl true
   def handle_call({@answer_to_be_observed, observed, observer, answer}, _from, %{game_state: game_state} = state) do
-    log("#{observed} #{answer} to be observed by #{observer}")
+    Utils.Log.log("TableManager", "#{observed} #{answer} to be observed by #{observer}", &Colors.with_yellow_bright/1)
 
     observers = game_state[:observers]
     players = game_state[:players]
 
     case {Map.has_key?(observers, observer), Map.has_key?(players, observed)} do
       {false, _} ->
-        log("#{observed} #{answer} to be observed by #{observer} - :he_is_not_an_observer")
+        Utils.Log.log("TableManager", "#{observed} #{answer} to be observed by #{observer} - :he_is_not_an_observer", &Colors.with_yellow_bright/1)
         {:reply, {:error, :he_is_not_an_observer}, state}
 
       {_, false} ->
-        log("#{observed} #{answer} to be observed by #{observer} - :player_does_not_exist")
+        Utils.Log.log("TableManager", "#{observed} #{answer} to be observed by #{observer} - :player_does_not_exist", &Colors.with_yellow_bright/1)
         {:reply, {:error, :player_does_not_exist}, state}
 
       {true, true} ->
-        log("#{observed} #{answer} to be observed by #{observer} - :ok")
+        Utils.Log.log("TableManager", "#{observed} #{answer} to be observed by #{observer} - :ok", &Colors.with_yellow_bright/1)
 
         new_notifications_observers =
           Enum.map(get_in(game_state, [:notifications, :observers]), fn
@@ -403,7 +404,7 @@ defmodule Actors.NewTableManager do
         } =
           state
       ) do
-    log("#{name} choice: #{card[:key]}")
+    Utils.Log.log("TableManager", "#{name} choice: #{card[:key]}", &Colors.with_yellow_bright/1)
 
     dealer_index = game_state[:dealer_index]
     used_card_count = game_state[:used_card_count]
@@ -718,7 +719,7 @@ defmodule Actors.NewTableManager do
     end_game = game_state[:end_game]
     replay_names = end_game[:replay_names]
 
-    log("#{name} want to replay")
+    Utils.Log.log("TableManager", "#{name} want to replay", &Colors.with_yellow_bright/1)
 
     players = game_state[:players]
     observers = game_state[:observers]
@@ -798,7 +799,7 @@ defmodule Actors.NewTableManager do
 
   @impl true
   def init(%{deck: deck, game_dealer_index: game_dealer_index, game_state: game_state} = initial_state) do
-    log("Table Manager init " <> inspect(self()))
+    Utils.Log.log("TableManager", "Table Manager init " <> inspect(self()), &Colors.with_yellow_bright/1)
     players = game_state[:players]
 
     [p1, p2, p3] =
@@ -916,9 +917,6 @@ defmodule Actors.NewTableManager do
   end
 
   # *** private api
-  defp log(msg) do
-    IO.puts("#{Colors.with_yellow_bright("TableManager")} #{msg}")
-  end
 
   defp each_in_list(players, observers, fun) when is_function(fun, 1) do
     Map.merge(players, observers)
