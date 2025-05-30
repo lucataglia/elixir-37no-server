@@ -16,6 +16,7 @@ defmodule Actors.NewTableManager do
   @player_observe :player_observe
   @replay :replay
   @share :share
+  @stash :stash
   @shutdown_due_to_inactivity :shutdown_due_to_inactivity
   @wrapper_inner :wrapper_inner
   @wrapper_outer :wrapper_outer
@@ -131,15 +132,13 @@ defmodule Actors.NewTableManager do
   # Handled only for the cast, not for the call
   @impl true
   def handle_cast({msg, @wrapper_outer}, %{timers_shutdown_due_to_inactivity: ref} = state) do
-    Utils.Log.log("TableManager", "Wrapper #{inspect(msg)} #{inspect(ref)}", &Colors.with_yellow_bright/1)
-
     case ref do
       nil ->
         nil
 
       r ->
         millis_left = Process.cancel_timer(r)
-        Utils.Log.log("TableManager", "Wrapper #{inspect(ref)} clear timer: #{millis_left}", &Colors.with_yellow_bright/1)
+        Utils.Log.log("TableManager", "Wrapper - clear timer: #{millis_left}", &Colors.with_yellow_bright/1)
     end
 
     new_ref = Process.send_after(self(), @shutdown_due_to_inactivity, timer_inactivity())
@@ -857,6 +856,13 @@ defmodule Actors.NewTableManager do
     case mode do
       {:uuid, uuid} -> GenServer.call({:global, uuid}, {@share, name})
       {:pid, pid} -> GenServer.call(pid, {@share, name})
+    end
+  end
+
+  def stash(mode, name, card) do
+    case mode do
+      {:uuid, uuid} -> GenServer.call({:global, uuid}, {@stash, name, card})
+      {:pid, pid} -> GenServer.call(pid, {@stash, name, card})
     end
   end
 

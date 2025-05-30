@@ -95,37 +95,37 @@ defmodule Actors.Lobby do
   # PRINT MESSAGES
   @impl true
   def handle_cast({@msg_info, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.message(msg))
+    :ssl.send(client, Messages.message(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_info, msg, piggyback}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{msg}#{Messages.message(piggyback)}")
+    :ssl.send(client, "#{msg}#{Messages.message(piggyback)}")
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_warning, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.warning(msg))
+    :ssl.send(client, Messages.warning(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_warning, msg, piggyback}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{msg}#{Messages.warning(piggyback)}")
+    :ssl.send(client, "#{msg}#{Messages.warning(piggyback)}")
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_success, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.success(msg))
+    :ssl.send(client, Messages.success(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_success, msg, piggyback}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{msg}#{Messages.success(piggyback)}")
+    :ssl.send(client, "#{msg}#{Messages.success(piggyback)}")
     {:noreply, state}
   end
 

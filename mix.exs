@@ -17,11 +17,11 @@ defmodule Elixir37noServer.MixProject do
 
     case Mix.env() do
       :test ->
-        [extra_applications: [:logger]]
+        [extra_applications: [:logger, :ssl]]
 
       _ ->
         [
-          extra_applications: [:logger],
+          extra_applications: [:logger, :ssl],
           mod: {SimpleServer, [port]}
         ]
     end

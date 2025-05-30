@@ -37,25 +37,25 @@ defmodule Actors.Login do
   # PRINT MESSAGES
   @impl true
   def handle_cast({:message, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.message(msg))
+    :ssl.send(client, Messages.message(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({:warning, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.warning(msg))
+    :ssl.send(client, Messages.warning(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({:warning, head, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, "#{head}#{Messages.warning(msg)}")
+    :ssl.send(client, "#{head}#{Messages.warning(msg)}")
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({:success, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.success(msg))
+    :ssl.send(client, Messages.success(msg))
     {:noreply, state}
   end
 

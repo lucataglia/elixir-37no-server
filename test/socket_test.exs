@@ -4,7 +4,7 @@ defmodule MyApp.SocketTest do
   """
 
   use ExUnit.Case, async: false
-  alias :gen_tcp, as: TCP
+  alias :ssl, as: TCP
 
   @port 4000
 
@@ -14,21 +14,13 @@ defmodule MyApp.SocketTest do
     :ok
   end
 
-  # TODO:
-  # We need to change the `players` and `deck` data structures from maps to keyword lists.
-  # This is because keyword lists preserve the order of elements and allow duplicate keys,
-  # which is important for maintaining the correct sequence and behavior in our game logic.
-  # Unlike maps, keyword lists guarantee consistent iteration order, making them better suited
-  # for scenarios where order matters (e.g., player turns, card order in the deck).
-  #
-  # Please update all relevant code to handle keyword lists accordingly.
+  #  verify: :verify_none # Accept self-signed/test certs
   test "three clients connect and send commands in sequence with active true" do
-    # {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock4} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
-    {:ok, sock5} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true])
+    {:ok, sock1} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true, verify: :verify_none])
+    {:ok, sock2} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true, verify: :verify_none])
+    {:ok, sock3} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true, verify: :verify_none])
+    {:ok, sock4} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true, verify: :verify_none])
+    {:ok, sock5} = TCP.connect(~c"localhost", @port, [:binary, buffer: 65_536, recbuf: 131_072, sndbuf: 131_072, active: true, verify: :verify_none])
 
     pid = spawn_link(fn -> loop(sock3) end)
 
@@ -116,9 +108,9 @@ defmodule MyApp.SocketTest do
     play_card(sock2, "2s")
     play_card(sock3, "2c")
 
+    stash_card(sock1, "2h")
     play_card(sock2, "4c")
     play_card(sock3, "kc")
-    play_card(sock1, "2h")
 
     play_card(sock3, "ah")
     play_card(sock1, "kh")
@@ -432,15 +424,15 @@ defmodule MyApp.SocketTest do
 
   defp loop(socket) do
     receive do
-      {:tcp, ^socket, data} ->
+      {:ssl, ^socket, data} ->
         IO.puts(data)
         loop(socket)
 
-      {:tcp_closed, ^socket} ->
+      {:ssl_closed, ^socket} ->
         IO.puts("Connection closed")
         :ok
 
-      {:tcp_error, ^socket, reason} ->
+      {:ssl_error, ^socket, reason} ->
         IO.puts("TCP error: #{inspect(reason)}")
         :error
 
@@ -469,36 +461,37 @@ defmodule MyApp.SocketTest do
 
   defp play_card_really_fast(socket, card) do
     TCP.send(socket, "#{card}\n")
+    Process.sleep(20)
   end
 
   defp play_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(15)
+    Process.sleep(50)
   end
 
   defp stash_card(socket, card) do
     TCP.send(socket, "#{card}\n")
-    Process.sleep(15)
+    Process.sleep(50)
   end
 
   defp replay(socket) do
     TCP.send(socket, "replay\n")
-    Process.sleep(15)
+    Process.sleep(50)
   end
 
   defp share(socket) do
     TCP.send(socket, "share\n")
-    Process.sleep(15)
+    Process.sleep(50)
   end
 
   defp exit_fn(socket) do
     TCP.send(socket, "exit\n")
-    Process.sleep(15)
+    Process.sleep(50)
   end
 
   defp back(socket) do
     TCP.send(socket, "back\n")
-    Process.sleep(15)
+    Process.sleep(50)
   end
 
   defp assert_response(socket, expected) do

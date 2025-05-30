@@ -1,3 +1,5 @@
+![37-no screenshot](./img/37no-screen.png)
+
 # 37no (Tressette Variant) - Rules and Description
 
 Alongside **Scopa** and **Briscola**, **Tressette** is one of the great classics of Italian card games. It is widely played throughout Italy, not only in its traditional form but also in numerous local variants, some more or less codified. One of the best-known variants is the **Traversone**, also called **“Ciapa no”** (in Milanese dialect), **“Ass’e mazzo”** (Neapolitan dialect meaning ‘ace of the deck’), **“Rovescino”**, **“Tressette a perdere”**, or **“Tressette a non prendere”**.
@@ -48,3 +50,47 @@ The total points available per deal add up to **11 points**:
 | Total points per deal | 11                                                |
 | Objective             | Lowest score wins                                 |
 |                       |
+
+---
+
+## How to Start and Play the Game
+By following these steps, you can play with your friends without deploying the game to an external server. All account data and game statistics are saved locally in a JSON file on your computer.
+
+
+
+### Creating a Self-Signed TLS Certificate
+
+To run the game with TLS, you need to create your own self-signed SSL certificate and private key. This is necessary because the app expects TLS certificates for secure communication.
+
+Run this OpenSSL command in the root of the repository to generate them:
+```bash
+openssl req -newkey rsa:2048 -nodes -keyout server.key -x509 -days 365 -out server.crt
+```
+
+### Run the game
+
+1. **Install [bore](https://github.com/ekzhang/bore)** — a tool to expose your local server to the internet ([Click here](https://github.com/ekzhang/bore))
+
+
+2. **Start the game server** - in one terminal run
+`mix run --no-halt`
+
+3. **Expose your the local port (e.g., 4000) using bore** - in a second terminal run
+`bore local 4000 --to bore.pub`.
+Bore will provide you with a public hostname and port, for example: `bore.pub:12345`
+
+
+4. **Connect to the game server using OpenSSL** in a third terminal run (replace `<port>` with the port given by bore)
+`openssl s_client -connect bore.pub:<port> -tls1_3 -ign_eof`
+
+
+5. **Start playing!** Now you can share the OpenSSL command with your friends and begin playing together.
+
+---
+
+### Notes
+
+- Make sure you have Elixir and OpenSSL installed on your machine.
+- The game uses TLS 1.3 for secure communication.
+
+

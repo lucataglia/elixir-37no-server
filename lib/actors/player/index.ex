@@ -2,7 +2,6 @@ defmodule Actors.Player do
   @moduledoc """
   Actors.Player
   """
-  alias Utils.Colors
 
   use GenServer
 
@@ -90,25 +89,25 @@ defmodule Actors.Player do
   # PRINT MESSAGES
   @impl true
   def handle_cast({@msg_info, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.message(msg))
+    :ssl.send(client, Messages.message(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_warning, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.warning(msg))
+    :ssl.send(client, Messages.warning(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@msg_success, msg}, %{client: client} = state) do
-    :gen_tcp.send(client, Messages.success(msg))
+    :ssl.send(client, Messages.success(msg))
     {:noreply, state}
   end
 
   @impl true
   def handle_cast({@print_table, piggyback}, %{client: client, name: name, stash: stash, game_state: game_state, behavior: behavior} = state) do
-    :gen_tcp.send(client, Messages.print_table(game_state, name, piggyback: piggyback, stash: stash, behavior: behavior))
+    :ssl.send(client, Messages.print_table(game_state, name, piggyback: piggyback, stash: stash, behavior: behavior))
     {:noreply, state}
   end
 
@@ -582,73 +581,93 @@ defmodule Actors.Player do
   defp better_behavior(data, %{name: name, game_state: game_state, deck: deck, behavior: :better} = state) do
     Utils.Log.log("Player", name, " better: #{data}", &Utils.Colors.with_magenta/1)
 
+    cards = game_state[:players][name][:cards]
     turn_first_card = game_state[:turn_first_card]
 
+    cards_list =
+      Enum.to_list(cards)
+      |> Enum.filter(fn {_, %{used: u}} -> !u end)
+      |> Enum.map(fn {key, %{suit: s}} -> {key, s} end)
+
+    {_first_key, first_suit} = Enum.at(cards_list, 0)
+
+    all_same_suit =
+      cards_list
+      |> Enum.all?(fn {_key, suit} -> suit == first_suit end)
+
     new_state =
-      if turn_first_card == nil do
-        warning_message(self(), Messages.wait_your_turn())
+      cond do
+        # If All the cards have the same suit you can stash whenever you want
+        all_same_suit && Enum.find(cards_list, fn {key, _} -> key == String.to_atom(data) end) ->
+          Utils.Log.log("Player", name, "stash (all_same_suit): #{inspect(data)} #{inspect(cards_list)}", &Utils.Colors.with_magenta/1)
+          print_table(self(), Actors.Player.Messages.card_stashed(data))
 
-        state
-      else
-        case Utils.Regex.check_is_valid_card_key(data) do
-          {:error, :invalid_input} ->
-            piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-            print_table(self(), piggyback)
+          %{state | stash: data}
 
-            state
+        # Otherwise, if the first player of the turn DID NOT play his card you CANNOT stash
+        turn_first_card == nil ->
+          warning_message(self(), "#{Messages.wait_your_turn()} #{data}")
 
-          :ok ->
-            turn_first_card = game_state[:turn_first_card]
+          state
 
-            cards = game_state[:players][name][:cards]
-            choice = deck[String.to_atom(data)]
-
-            if choice do
-              if Map.has_key?(cards, String.to_atom(data)) do
-                case Deck.check_card_is_valid(data, cards, turn_first_card) do
-                  :ok ->
-                    Utils.Log.log("Player", name, "stash: #{inspect(choice.key)}", &Utils.Colors.with_magenta/1)
-
-                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
-                    %{state | stash: choice.key}
-
-                  {:ok, :change_ranking} ->
-                    Utils.Log.log("Player", name, "stash: #{inspect(choice.key)}", &Utils.Colors.with_magenta/1)
-
-                    print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
-                    %{state | stash: choice.key}
-
-                  {:error, :wrong_suit} ->
-                    piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
-                    print_table(self(), piggyback)
-
-                    state
-
-                  {:error, :card_already_used} ->
-                    piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
-                    print_table(self(), piggyback)
-
-                    state
-
-                  {:error, :invalid_input} ->
-                    piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
-                    print_table(self(), piggyback)
-
-                    state
-                end
-              else
-                piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
-                print_table(self(), piggyback)
-
-                state
-              end
-            else
+        # If the first player of the turn DID play his card you CAN stash
+        true ->
+          case Utils.Regex.check_is_valid_card_key(data) do
+            {:error, :invalid_input} ->
               piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
               print_table(self(), piggyback)
 
               state
-            end
-        end
+
+            :ok ->
+              choice = deck[String.to_atom(data)]
+
+              if choice do
+                if Map.has_key?(cards, String.to_atom(data)) do
+                  case Deck.check_card_is_valid(data, cards, turn_first_card) do
+                    :ok ->
+                      Utils.Log.log("Player", name, "stash: #{inspect(choice.key)}", &Utils.Colors.with_magenta/1)
+
+                      print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
+                      %{state | stash: choice.key}
+
+                    {:ok, :change_ranking} ->
+                      Utils.Log.log("Player", name, "stash: #{inspect(choice.key)}", &Utils.Colors.with_magenta/1)
+
+                      print_table(self(), Actors.Player.Messages.card_stashed(choice.key))
+                      %{state | stash: choice.key}
+
+                    {:error, :wrong_suit} ->
+                      piggyback = IO.ANSI.format([:yellow, Messages.you_have_to_play_the_right_suit(choice[:pretty], turn_first_card[:suit])])
+                      print_table(self(), piggyback)
+
+                      state
+
+                    {:error, :card_already_used} ->
+                      piggyback = IO.ANSI.format([:yellow, Messages.card_already_used(choice[:pretty])])
+                      print_table(self(), piggyback)
+
+                      state
+
+                    {:error, :invalid_input} ->
+                      piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+                      print_table(self(), piggyback)
+
+                      state
+                  end
+                else
+                  piggyback = IO.ANSI.format([:yellow, Messages.you_dont_have_that_card(choice[:pretty])])
+                  print_table(self(), piggyback)
+
+                  state
+                end
+              else
+                piggyback = IO.ANSI.format([:yellow, Messages.unexisting_card(data)])
+                print_table(self(), piggyback)
+
+                state
+              end
+          end
       end
 
     {:noreply, new_state}

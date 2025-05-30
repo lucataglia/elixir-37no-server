@@ -668,13 +668,13 @@ defmodule NotificationTable do
       end)
       |> Enum.map(fn
         {_, observed, "pending"} ->
-          ["🕣 Pending", "Waiting for a response to your observation request", observed]
+          ["🕣 Pending", "Waiting for observation approval", observed]
 
         {_, observed, "rejected"} ->
-          ["❌ Rejected", "The user has denied or revoked permission to observe the game", observed]
+          ["❌ Rejected", "Request to observe the game denied or revoked", observed]
 
         {_, observed, "accepted"} ->
-          ["✅ Accepted", "The user accepted your request to observe the game", observed]
+          ["✅ Accepted", "Request to observe the game accepted", observed]
       end)
 
     if rows == [] do

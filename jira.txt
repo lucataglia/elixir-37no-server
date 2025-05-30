@@ -19,3 +19,13 @@ Put the timestamp into the log
 
 Fix the marconobile bug when it was dealer 
 ✅ (add dealer_with_choice behavior)
+
+Add TLS
+✅
+
+When the better stash the check is done in the check about the turn_first_card PlayerActor side. That's a problem,
+it would be better if all those checks are done on the TableManager side. The problem is that adding TLS there are
+some latency that slow down the comunications and some corner cases rose. Stash must be a message sent to the 
+TableManager and must be a sync messaege (and probably also the @choice message)
+
+For the TableManager the cast reset the timer while the call doesn't ... fix that
