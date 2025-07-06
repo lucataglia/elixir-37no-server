@@ -424,7 +424,7 @@ defmodule Messages do
     end_game_message =
       cond do
         behavior == :observer ->
-          ""
+          replay_names
 
         used_card_count == Deck.card_count() ->
           if game_state[:there_is_a_looser] do

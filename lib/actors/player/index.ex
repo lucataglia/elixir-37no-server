@@ -673,7 +673,6 @@ defmodule Actors.Player do
     {:noreply, new_state}
   end
 
-  @impl true
   defp end_game_behavior(data, %{name: name, table_manager_pid: table_manager_pid, behavior: :end_game} = state) do
     Utils.Log.log("Player", name, "end_game: #{data}", &Utils.Colors.with_magenta/1)
 
@@ -698,7 +697,6 @@ defmodule Actors.Player do
     end
   end
 
-  @impl true
   defp ready_to_replay_behavior(data, %{name: name, table_manager_pid: table_manager_pid, behavior: :ready_to_replay} = state) do
     Utils.Log.log("Player", name, "ready_to_replay: #{data}", &Utils.Colors.with_magenta/1)
 
